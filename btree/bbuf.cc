@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: bbuf.cc,v 1.4 2004/01/22 09:02:29 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: bbuf.cc,v 1.2 2003/06/11 19:41:07 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #include <stdio.h>
 #include <limits.h>
@@ -78,7 +80,7 @@ int CPPEXPORT BLOCKBUF::deinit(void)
        bbnext=bb->next, delete bb, bb=bbnext)
   {
     if (bb->pvBlock)
-      delete [] (char *)(bb->pvBlock);
+      delete [] bb->pvBlock;
   }
 
   fOpen=FALSE;
@@ -242,7 +244,7 @@ int CPPEXPORT BLOCKBUF::get_lru(NNUM *pnn, void *pvBlock, unsigned *pfDelta)
 
   // Now delete the memory associated with this block
 
-  delete [] (char *)(bbLow->pvBlock);
+  delete [] bbLow->pvBlock;
   delete bbLow;
 
   // Decrement the block count for this list

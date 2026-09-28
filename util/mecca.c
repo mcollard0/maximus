@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: mecca.c,v 1.5 2004/01/27 23:02:55 paltas Exp $";
+static char rcs_id[]="$Id: mecca.c,v 1.2 2003/06/05 03:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=MECCA -- the Maximus Embedded Command Compiler (Advanced)
     name=
@@ -100,200 +98,349 @@ int _stdc main(int argc,char *argv[])
 }
 
 
+/* Return true if path has a filename extension after the last directory sep. */
+static int near MeccaHasExtension(char *path)
+{
+  char *p;
+  char *slash;
+
+  if (!path || !*path)
+    return FALSE;
+
+  slash=strrstr(path, "\\/:");
+  p=strrchr(path, '.');
+
+  if (!p)
+    return FALSE;
+
+  /* Dot only counts as an extension if it is after the last path separator. */
+  if (slash && p < slash)
+    return FALSE;
+
+  /* Trailing dot ("file.") is not a real extension. */
+  if (p[1]=='\0')
+    return FALSE;
+
+  return TRUE;
+}
+
+/* Build default .bbs/.rbs outname for a single inname. */
+static void near MeccaDefaultOutname(char *inname, char *outname)
+{
+  char temp[PATHLEN];
+  char *dot;
+
+  strcpy(temp, inname);
+
+  if (MeccaHasExtension(temp))
+  {
+    dot=strrchr(temp, '.');
+    if (dot)
+      *dot='\0';
+  }
+
+  strcpy(outname, temp);
+  strcat(outname, exts[o_type]);
+}
+
+/* Compile one concrete input path (no wildcards required). */
+static void near MeccaCompileOne(char *src, char *forced_out, int time_comp)
+{
+  static char inname[PATHLEN];
+  static char outname[PATHLEN];
+  char *p;
+  int wastype=o_type;
+
+  strcpy(inname, src);
+  max_len=12;
+
+  p=strrstr(inname, "\\/:");
+  if (p)
+    max_len=(int)(p - inname) + 1 + 12;
+
+  if (eqstri(inname + strlen(inname) - 4, ".mer") ||
+      eqstri(inname + strlen(inname) - 4, ".MER"))
+    o_type=1;
+
+  if (forced_out && *forced_out)
+  {
+    strcpy(outname, forced_out);
+
+    /* Directory destination: append basename without extension. */
+    if (outname[strlen(outname)-1]==PATH_DELIM
+#ifndef UNIX
+        || outname[strlen(outname)-1]=='\\'
+        || outname[strlen(outname)-1]==':'
+#endif
+       )
+    {
+      char base[PATHLEN];
+      char *bn;
+
+      strcpy(base, inname);
+      bn=strrstr(base, "\\/:");
+      bn=bn ? bn+1 : base;
+
+      if (MeccaHasExtension(bn))
+      {
+        p=strrchr(bn, '.');
+        if (p)
+          *p='\0';
+      }
+
+      strcat(outname, bn);
+      strcat(outname, exts[o_type]);
+    }
+    else if (!MeccaHasExtension(outname))
+      strcat(outname, exts[o_type]);
+  }
+  else
+    MeccaDefaultOutname(inname, outname);
+
+  /* If input had no extension, try default .mec/.mer */
+  if (!MeccaHasExtension(inname))
+  {
+    char tryname[PATHLEN];
+
+    strcpy(tryname, inname);
+    strcat(tryname, ixts[o_type]);
+
+    if (fexist(tryname))
+      strcpy(inname, tryname);
+    else
+    {
+      strcpy(tryname, inname);
+      strcat(tryname, ixts[!o_type]);
+      if (fexist(tryname))
+      {
+        strcpy(inname, tryname);
+        o_type=!o_type;
+        MeccaDefaultOutname(inname, outname);
+      }
+    }
+  }
+
+  lcol=7;
+  n_scol=0;
+  Compile(inname, outname, 0, time_comp);
+  o_type=wastype;
+}
+
 void Parse_Args(int argc,char *argv[])
 {
   FFIND *ff;
 
   static char inname[PATHLEN];
   static char outname[PATHLEN];
-  static char av1[PATHLEN];
-  static char av2[PATHLEN];
   static char temp[PATHLEN];
+  char *files[256];
+  int nfiles=0;
   char *p;
 
-  int found_extension;
   int time_comp;
   int ret;
   int x;
+  int i;
 
-  *av1='\0';
-  *av2='\0';
   time_comp=FALSE;
 
   for (x=1; x < argc; x++)
   {
+    /* On UNIX '/' is the path root — only '-' is a switch. DOS keeps '/'. */
+#ifndef UNIX
+    if (*argv[x]=='-' || *argv[x]=='/')
+#else
     if (*argv[x]=='-')
+#endif
     {
-      switch(tolower(argv[x][1]))
+      switch(tolower((unsigned char)argv[x][1]))
       {
         case 'r':
           o_type=!o_type;
           break;
-        default:  /* for backwards compatibility */
         case 't':
+          time_comp=TRUE;
+          break;
+        case 'h':
+        case '?':
+          printf("Usage: MECCA <infile> [outfile] [-t] [-r]\n\n");
+          printf("Multiple <infile> arguments are each compiled to matching .bbs/.rbs files.\n");
+          printf("A single wildcard pattern (e.g. 'etc/misc/*.mec') is also accepted.\n");
+          printf("-t  only compile when source is newer than output\n");
+          printf("-r  RIP mode (default extension .rbs)\n");
+          exit(0);
+        default:
+          /* Unknown switches were historically treated as -t. */
           time_comp=TRUE;
           break;
       }
     }
-    else if (*av1)
-      strcpy(av2, argv[x]);
-    else strcpy(av1, argv[x]);
+    else if (nfiles < (int)(sizeof(files)/sizeof(files[0])))
+      files[nfiles++]=argv[x];
   }
 
-  if ((ff=FindOpen(av1, 0))==NULL)
+  if (nfiles < 1)
   {
-    strcpy(temp, av1);
-    strcat(temp, ".mec");
+    errs++;
+    printf("No input file specified.\n");
+    return;
+  }
 
-    if ((ff=FindOpen(temp, 0))==NULL)
+  /* Three or more path args: shell-expanded list of discrete sources.
+   * Compiling fileA fileB as infile/outfile silently destroyed sources.
+   */
+  if (nfiles >= 3)
+  {
+    for (i=0; i < nfiles; i++)
+      MeccaCompileOne(files[i], NULL, time_comp);
+    return;
+  }
+
+  /* Two discrete sources (no wildcards): also treat as multi-input.
+   * Legacy "infile outfile" only when the first arg is a wildcard pattern
+   * or the second looks like an explicit output path/directory.
+   */
+  if (nfiles == 2 &&
+      !strchr(files[0], '*') && !strchr(files[0], '?') &&
+      files[1][strlen(files[1])-1] != PATH_DELIM &&
+#ifndef UNIX
+      files[1][strlen(files[1])-1] != '\\' &&
+      files[1][strlen(files[1])-1] != ':' &&
+#endif
+      (strchr(files[1], '*') || strchr(files[1], '?') ||
+       eqstri(files[1] + (strlen(files[1]) > 4 ? strlen(files[1])-4 : 0), ".mec") ||
+       eqstri(files[1] + (strlen(files[1]) > 4 ? strlen(files[1])-4 : 0), ".mer")))
+  {
+    MeccaCompileOne(files[0], NULL, time_comp);
+    MeccaCompileOne(files[1], NULL, time_comp);
+    return;
+  }
+
+  /* Single pattern, or pattern + optional out path, or infile + outfile. */
+  {
+    char *av1=files[0];
+    char *av2=(nfiles >= 2) ? files[1] : "";
+
+    if ((ff=FindOpen(av1, 0))==NULL)
     {
       strcpy(temp, av1);
-      strcat(temp, ".mer");
+      strcat(temp, ".mec");
 
       if ((ff=FindOpen(temp, 0))==NULL)
       {
-        errs++;
-        printf("File not found: `%s'\n",av1);
-        return;
+        strcpy(temp, av1);
+        strcat(temp, ".mer");
+
+        if ((ff=FindOpen(temp, 0))==NULL)
+        {
+          errs++;
+          printf("File not found: `%s'\n",av1);
+          return;
+        }
       }
     }
-  }
 
-  for (ret=0; ret==0; ret=FindNext(ff))
-  {
-    int wastype=o_type;
-
-    strcpy(inname, av1);
-    max_len=12;
-
-    if (
-	(p=strrchr(inname, '/')) != NULL || 
-	(p=strrchr(inname, '\\')) != NULL ||
-        (p=strrchr(inname, ':')) != NULL)
+    for (ret=0; ret==0; ret=FindNext(ff))
     {
-      *(p+1)='\0';
-      max_len=strlen(inname)+12;
-      strcpy(p+1, ff->szName);
-    }
-    else strcpy(inname, ff->szName);
+      int wastype=o_type;
 
-    if ((p=strchr(av1, '.')) != NULL && *(p+1)=='\0')
-      strcat(inname, ".");
+      strcpy(inname, av1);
+      max_len=12;
 
-    if (strchr(av1,'*') || strchr(av1,'?'))
-    {
-      if (*av2)
+      if (
+          (p=strrchr(inname, '/')) != NULL ||
+          (p=strrchr(inname, '\\')) != NULL ||
+          (p=strrchr(inname, ':')) != NULL)
+      {
+        *(p+1)='\0';
+        max_len=strlen(inname)+12;
+        strcpy(p+1, ff->szName);
+      }
+      else strcpy(inname, ff->szName);
+
+      if ((p=strchr(av1, '.')) != NULL && *(p+1)=='\0')
+        strcat(inname, ".");
+
+      *outname='\0';
+
+      if (strchr(av1,'*') || strchr(av1,'?'))
+      {
+        if (*av2)
+        {
+          strcpy(outname,av2);
+
+#ifndef UNIX
+          if (outname[strlen(outname)-1] != '\\' && outname[strlen(outname)-1] != ':')
+#else
+          if (outname[strlen(outname)-1] != PATH_DELIM)
+#endif
+            strcat(outname, PATH_DELIMS);
+        }
+        else strcpy(outname,inname);
+
+        if (
+            (p=strrchr(outname, '\\')) != NULL ||
+            (p=strrchr(outname, '/')) != NULL ||
+            (p=strrchr(outname, ':')) != NULL
+           )
+        {
+          *(p+1)='\0';
+          strcat(outname, ff->szName);
+
+          if ((p=strrchr(outname, '.')) != NULL)
+            *p='\0';
+        }
+        else *outname='\0';
+      }
+      else if (*av2)
       {
         strcpy(outname,av2);
 
 #ifndef UNIX
-        if (outname[strlen(outname)-1] != '\\' && outname[strlen(outname)-1] != ':')  
+        if (outname[strlen(outname)-1]=='\\' || outname[strlen(outname)-1]==':')
 #else
-        if (outname[strlen(outname)-1] != PATH_DELIM)
+        if (outname[strlen(outname)-1]==PATH_DELIM)
 #endif
-          strcat(outname, PATH_DELIMS);
-      }
-      else strcpy(outname,inname);
-
-      if (
-	  (p=strrchr(outname, '\\')) != NULL || 
-	  (p=strrchr(outname, '/')) != NULL ||
-          (p=strrchr(outname, ':')) != NULL
-	 )
-      {
-        *(p+1)='\0';
-        strcat(outname, ff->szName);
-
-        if ((p=strrchr(outname, '.')) != NULL)
-          *p='\0';
-      }
-      else *outname='\0';
-    }
-    else if (argc >= 3) /* No wildcards */
-    {
-      strcpy(outname,av2);
-
-#ifndef UNIX
-      if (outname[strlen(outname)-1]=='\\' || outname[strlen(outname)-1]==':')
-#else
-      if (outname[strlen(outname)-1]==PATH_DELIM)
-#endif
-      {
-        strcat(outname, ff->szName);
-
-        if ((p=strrchr(outname,'.')) != NULL)
-          *p='\0';
-      }
-    }
-    else *outname='\0';
-
-    found_extension=FALSE;
-    p=inname;
-
-    if (strpbrk(p, PATHDELIM) != NULL) /* Find if there's a filename extension */
-    {
-      while ((p=strpbrk(p, PATHDELIM)) != NULL)
-      {
-        if (*p=='\\' || *p=='/')
-          found_extension=FALSE;
-
-        if (*p=='.')
         {
-          found_extension=TRUE;
-          if (eqstri(p+1,"mer"))
-            o_type=1;
+          strcat(outname, ff->szName);
+
+          if ((p=strrchr(outname,'.')) != NULL)
+            *p='\0';
         }
-
-        p++;
       }
-    }
 
-    strcpy(temp,inname);
-
-    if (found_extension)
-    {
-      if (! *outname)
+      if (MeccaHasExtension(inname))
       {
-        (*strrchr(temp,'.'))='\0';   /* Chop off extension */
-        strcpy(outname,temp);
+        if (eqstri(strrchr(inname,'.')+1, "mer"))
+          o_type=1;
+
+        if (! *outname)
+        {
+          strcpy(temp,inname);
+          (*strrchr(temp,'.'))='\0';
+          strcpy(outname,temp);
+        }
       }
-    }
-    else
-    {
-      if (! *outname)
-        strcpy(outname,inname);
-
-      strcat(inname,ixts[o_type]);
-    }
-
-    found_extension=FALSE;
-    p=outname;
-
-    if (strpbrk(p, PATHDELIM) != NULL) /* Find if there's a filename extension */
-    {
-      while ((p=strpbrk(p, PATHDELIM)) != NULL)
+      else
       {
-        if (*p=='\\' || *p=='/')
-          found_extension=FALSE;
+        if (! *outname)
+          strcpy(outname,inname);
 
-        if (*p=='.')
-          found_extension=TRUE;
-
-        p++;
+        strcat(inname,ixts[o_type]);
       }
+
+      if (!MeccaHasExtension(outname))
+        strcat(outname, exts[o_type]);
+
+      lcol=7;
+      n_scol=0;
+
+      Compile(inname, outname, 0, time_comp);
+      o_type=wastype;
     }
 
-    if (! found_extension)
-      strcat(outname, exts[o_type]);
-
-    lcol=7;
-    n_scol=0;
-
-    Compile(inname, outname, 0, time_comp);
-    o_type=wastype;
+    FindClose(ff);
   }
-
-  FindClose(ff);
 }
 
 
@@ -500,6 +647,21 @@ void Compile(char *inname,char *outname,int mode,int time_comp)
 
 
 
+static word near MeccaVerbLookup(char *token)
+{
+  word verbnum;
+  unsigned int i;
+
+  verbnum=sssearch(token, verbs, verb_table_size);
+  if (verbnum != 0xffffu)
+    return verbnum;
+
+  for (i=0; i < (unsigned int)verb_table_size; ++i)
+    if (verbs[i].verb && stricmp(token, verbs[i].verb)==0)
+      return (word)i;
+
+  return 0xffffu;
+}
 void Parse_Token(char *outname,FILE **outfile, char *inname)
 {
   struct _inf inf;
@@ -534,7 +696,7 @@ void Parse_Token(char *outname,FILE **outfile, char *inname)
     }
     else define=FALSE;
 
-    if ((verbnum=sssearch(p, verbs, verb_table_size))==0xffffu)
+    if ((verbnum=MeccaVerbLookup(p))==0xffffu)
     {
       /* Test for exceptions */
       if (isdigitstr(p))            /* A "[65]"-type ASCII code */

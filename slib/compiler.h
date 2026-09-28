@@ -387,10 +387,5 @@
 
 #include "compiler_align.h"
 #endif /* ! UNIX */
-
-#if !defined(__GNUC__ ) || !defined(UNIX)
-#define __attribute__(a)
-#endif
-
 #endif /* ! __COMPILER_H_DEFINED */
 

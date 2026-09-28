@@ -24,7 +24,7 @@
   {
     IADDR last;
     word arg_size;
-  } __attribute__((packed)) MA, *PMA;
+  } MA, *PMA;
 
 
   /* Helper macro for destroying structure-based strings */

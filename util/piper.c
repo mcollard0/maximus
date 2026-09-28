@@ -18,7 +18,7 @@
  */
 
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: piper.c,v 1.4 2004/01/27 21:06:06 paltas Exp $";
+static char rcs_id[]="$Id: piper.c,v 1.2 2003/06/05 03:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
 
 #error Obsolete.  This program is no longer in the distribution

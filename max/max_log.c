@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_log.c,v 1.9 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_log.c,v 1.1.1.1 2002/10/01 17:51:47 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Log-on routines and new-user junk
 */
@@ -39,6 +37,11 @@ static char rcs_id[]="$Id: max_log.c,v 1.9 2004/01/28 06:38:10 paltas Exp $";
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#if defined(UNIX)
+#include <sys/file.h>
+#include <signal.h>
+#include <errno.h>
+#endif
 #include <share.h>
 #include <ctype.h>
 #include "prog.h"
@@ -78,9 +81,9 @@ void Login(char *key_info)
 {
   signed int left;
   int newuser;
-  
+
   Calc_Timeoff();
-  
+
   if (! local && !waitforcaller)
     logit(log_caller_bps, baud);
 
@@ -104,12 +107,46 @@ void Login(char *key_info)
     mdm_hangup();
   }
 
+  if (!local)
+  {
+    if (baud >= prm.speed_rip && autodetect_rip())
+    {
+      usr.bits |= (BITS_RIP | BITS_FSR | BITS_HOTKEYS);
+      usr.video=GRAPH_ANSI;
+    }
+    else if (autodetect_ansi())
+    {
+      usr.video=GRAPH_ANSI;
+    }
+    else
+    {
+      usr.video=GRAPH_TTY;
+    }
+  }
+
   Banner();
 
   strcpy(usrname, us_short);
   ChatSetStatus(FALSE, cs_logging_on);
 
   newuser=!GetName();
+
+  /* Ensure caller terminal graphics are preserved after user record load */
+  if (!local)
+  {
+    if (hasRIP())
+    {
+      usr.bits |= (BITS_RIP | BITS_FSR | BITS_HOTKEYS);
+      usr.video = GRAPH_ANSI;
+      usr.bits2 |= BITS2_IBMCHARS;
+    }
+    else if (autodetect_ansi() || usr.video != GRAPH_TTY)
+    {
+      usr.video = GRAPH_ANSI;
+      usr.bits |= BITS_FSR;
+      usr.bits2 |= BITS2_IBMCHARS;
+    }
+  }
 
   Validate_Runtime_Settings();
   Set_OnOffTime();
@@ -224,7 +261,32 @@ static void near Banner(void)
   if ((! *linebuf && !local) || eqstri(linebuf,"-"))
   {
     *linebuf='\0';
-    Display_File(0,NULL,PRM(logo));
+    Display_File(DISPLAY_NOAUTOMORE, NULL, PRM(logo));
+    display_line=1;
+
+    /* RIP splash is display-only. Any key clears the graphic and drops to
+     * normal ANSI for login prompts (full-screen text, visible echo).
+     */
+    if (hasRIP())
+    {
+      mdm_dump(DUMP_INPUT);
+      Mdm_flush();
+      Mdm_getcw(); /* block until caller presses a key */
+
+      Puts("\r!|*\n");              /* same as rip_autoerase — reset RIP graphics */
+      Puts("\r!|1K|w0000270O10\n"); /* kill mouse fields; full 80x25 text window */
+      Mdm_flush();
+
+      usr.bits &= ~BITS_RIP;
+      Set_Lang_Alternate(FALSE);
+      usr.video = GRAPH_ANSI;
+      usr.bits |= BITS_FSR;
+      usr.bits2 |= (BITS2_IBMCHARS | BITS2_CLS);
+
+      Puts(ansi_cls);
+      display_line=display_col=current_line=current_col=1;
+      mdm_attr=-1;
+    }
   }
   else if (! *linebuf)
     strcpy(linebuf,PRM(sysop));
@@ -541,6 +603,7 @@ static void near doublecheck_ansi(void)
 {
   if ((prm.flags2 & FLAG2_CHKANSI) &&
       (usr.video==GRAPH_ANSI) &&
+      (usr.priv < 100) &&
       !autodetect_ansi() &&
       checkterm(check_ansi, "why_ansi"))
   {
@@ -734,8 +797,6 @@ static void near Get_AnsiMagnEt(void)
     NoWhiteN();
     sprintf(string,"%swhy_ansi",PRM(misc_path));
 
-/* TODO: Check up on this.. (Bo) */
-
     x=autodetect_ansi();
 
     if (! *linebuf)
@@ -760,7 +821,6 @@ static void near Get_AnsiMagnEt(void)
       NoWhiteN();
       sprintf(string,"%swhy_rip",PRM(misc_path));
 
-/* TODO: Check up on this.. (Bo) */
       x=autodetect_rip();
 
       if (GetListAnswer(x ? CYnq : yCNq, string, useyforyes, 0, get_rip)==YES)
@@ -1025,9 +1085,15 @@ static void near Check_For_User_On_Other_Node(void)
 
   char fname[PATHLEN];
 
-  unsigned int their_task;
+  word their_task;
 
   FFIND *ff;
+
+#ifdef UNIX
+  /* SysOp is always allowed to log in without node collision disconnects */
+  if (usr.priv >= 100 || eqstri(usr.name, "sysop") || eqstri(usr.name, PRM(sysop)))
+    return;
+#endif
 
   sprintf(fname,active_star,original_path);
 
@@ -1040,6 +1106,40 @@ static void near Check_For_User_On_Other_Node(void)
     
     if ((byte)their_task==task_num)
       continue;
+
+#ifdef UNIX
+    /* Verify whether their_task is actually an active running process */
+    {
+      char dtn_file[FILENAME_MAX];
+      FILE *fp;
+      int pid = 0;
+
+      snprintf(dtn_file, sizeof(dtn_file), "/tmp/max_dtn.%i", their_task);
+      if ((fp = fopen(dtn_file, "r")) != NULL)
+      {
+        if (fscanf(fp, "%d", &pid) == 1)
+        {
+          if (pid > 0 && kill((pid_t)pid, 0) == -1 && errno == ESRCH)
+          {
+            /* Process is dead! Clean up stale active and dtn files */
+            fclose(fp);
+            unlink(dtn_file);
+            sprintf(fname, activexx_bbs, original_path, their_task);
+            unlink(fname);
+            continue;
+          }
+        }
+        fclose(fp);
+      }
+      else
+      {
+        /* No DTN file at all; clean up stale active lock */
+        sprintf(fname, activexx_bbs, original_path, their_task);
+        unlink(fname);
+        continue;
+      }
+    }
+#endif
         
     sprintf(fname,
             their_task ? lastusxx_bbs : lastuser_bbs,
@@ -1285,7 +1385,7 @@ int autodetect_ansi(void)
 {
   int x;
 
-  if (local || !ComIsAModem(hcModem))
+  if (local)
     return TRUE;
 
   mdm_dump(DUMP_INPUT);
@@ -1312,7 +1412,7 @@ int autodetect_rip(void)
 {
   int x;
 
-  if (local || !ComIsAModem(hcModem))
+  if (local)
     return FALSE;
 
   /* RIP autodetect */

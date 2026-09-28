@@ -46,7 +46,6 @@ typedef enum
 #undef DeclareCommand
 } telnet_command_t;
 
-#if 0
 static struct 
 {
   telnet_command_t	cmdEnum;
@@ -57,7 +56,6 @@ static struct
 #include __FILE__
 #undef DeclareCommand
 };
-#endif
 
 typedef enum
 {

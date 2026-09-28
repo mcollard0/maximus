@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: zm.c,v 1.5 2005/10/19 10:57:10 paltas Exp $";
+static char rcs_id[]="$Id: zm.c,v 1.2 2003/06/05 01:16:01 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*
  *   Z M . C
@@ -121,8 +119,8 @@ static char rcs_id[]="$Id: zm.c,v 1.5 2005/10/19 10:57:10 paltas Exp $";
 #define ZRWINDOW 1400
 
 int Rxtimeout;                  /* Tenths of seconds to wait for something */
-int Rxframeind;          /* ZBIN ZBIN32, or ZHEX type of frame received */
-int Rxtype;              /* Type of header received */
+int Rxframeind;                 /* ZBIN ZBIN32, or ZHEX type of frame received (extern in zsjd.h) */
+int Rxtype;                     /* Type of header received (extern in zsjd.h) */
 int Rxcount;			/* Count of data bytes received */
 char Rxhdr[4];			/* Received header */
 char Txhdr[4];			/* Transmitted header */
@@ -507,7 +505,7 @@ zsbhdr(int type, char *hdr)
 
   dlogit(("@zsendhdr: %s %lx", frametypes[type+FTOFFSET], rclhdr(hdr)));
 
-  if ((Crc32t = Txfcs32))
+  if (Crc32t = Txfcs32)
     zsbh32(hdr, type);
   else
   {
@@ -915,7 +913,7 @@ zrdata(char *buf, int length)
 	case GOTCRCG:
 	case GOTCRCQ:
 	case GOTCRCW:
-          crc = ZmUpdCrc(((d = c) & 0xff), crc);
+          crc = ZmUpdCrc((d = c) & 0xff, crc);
 
           if ((c = zdlread()) & ~0xff)
 	    goto crcfoo;

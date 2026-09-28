@@ -17,18 +17,16 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: cppmain.cc,v 1.4 2005/10/19 10:57:09 paltas Exp $";
+static char rcs_id[]="$Id: cppmain.cc,v 1.1.1.1 2002/10/01 17:50:46 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 #include "prog.h"
 
-extern "C" { 
-	     int _stdc c_main(int argc, char *argv[]); 
-	     unsigned far _ovl_openflags(unsigned sharing_mode); 
-}
+extern "C" int c_main(int argc, char *argv[]);
+#if defined(__WATCOMC__) && defined(__MSDOS__)
+extern "C" unsigned far _ovl_openflags(unsigned sharing_mode);
+#endif
 
 int main(int argc, char *argv[])
 {

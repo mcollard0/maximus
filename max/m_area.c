@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: m_area.c,v 1.4 2004/01/27 21:00:30 paltas Exp $";
+static char rcs_id[]="$Id: m_area.c,v 1.2 2003/06/04 23:46:21 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Message Section: A)rea Change command and listing of message areas
 */

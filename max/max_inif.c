@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_inif.c,v 1.4 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_inif.c,v 1.1.1.1 2002/10/01 17:51:41 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=File-oriented initialization functions for Max
 */
@@ -38,6 +36,12 @@ static char rcs_id[]="$Id: max_inif.c,v 1.4 2004/01/28 06:38:10 paltas Exp $";
 #include "prog.h"
 #include "ffind.h"
 #include "mm.h"
+#ifdef UNIX
+#include <errno.h>
+#include <unistd.h>
+#include <sys/file.h>
+#endif
+
 
 #ifndef ORACLE
 
@@ -63,6 +67,28 @@ void Compare_Dates(char *ctlname,char *prmname)
 
 
 
+#ifdef UNIX
+/* Shared bbstats.bbs can be hit by many short-lived -n0 sessions.
+ * Exclusive flock with short retries avoids torn reads/writes.
+ */
+static int near lock_bbstats(int fd, int exclusive)
+{
+  int tries;
+  int op = exclusive ? LOCK_EX : LOCK_SH;
+
+  for (tries = 0; tries < 25; tries++)
+  {
+    if (flock(fd, op | LOCK_NB) == 0)
+      return 0;
+    if (errno != EWOULDBLOCK && errno != EAGAIN)
+      break;
+    usleep(20000); /* 20ms */
+  }
+  /* Last try blocking briefly is avoided; fail soft */
+  return flock(fd, op | LOCK_NB);
+}
+#endif
+
 int Read_Stats(struct _bbs_stats *bstats)
 {
   union stamp_combo now;
@@ -71,11 +97,21 @@ int Read_Stats(struct _bbs_stats *bstats)
 
   char temp[PATHLEN];
 
-  sprintf(temp,bbs_stats,PRM(sys_path),task_num);
+  /* Shared system stats (not per-task).  With -n0 dynamic tasks each node
+   * used to keep a private bbstatXX.bbs, so quote_pos and today_callers
+   * never accumulated and stats screens looked empty/stale.
+   */
+  sprintf(temp, "%sbbstats.bbs", PRM(sys_path));
 
   if ((bfile=shopen(temp, O_RDONLY | O_BINARY)) != -1)
   {
+#ifdef UNIX
+    lock_bbstats(bfile, 0);
+#endif
     read(bfile, (char *)bstats, sizeof(struct _bbs_stats));
+#ifdef UNIX
+    flock(bfile, LOCK_UN);
+#endif
     close(bfile);
     
     Get_Dos_Date(&now);
@@ -109,16 +145,40 @@ void Write_Stats(struct _bbs_stats *bstats)
 
   char temp[PATHLEN];
 
-  sprintf(temp,bbs_stats,PRM(sys_path),task_num);
+  /* Shared system stats (not per-task).  With -n0 dynamic tasks each node
+   * used to keep a private bbstatXX.bbs, so quote_pos and today_callers
+   * never accumulated and stats screens looked empty/stale.
+   */
+  sprintf(temp, "%sbbstats.bbs", PRM(sys_path));
 
-  if ((bfile=sopen(temp, O_CREAT | O_TRUNC | O_WRONLY | O_BINARY,
+  /* Open read/write without O_TRUNC first so we can lock, then rewrite.
+   * O_TRUNC+no-lock races can zero the file under another reader.
+   */
+  if ((bfile=sopen(temp, O_CREAT | O_RDWR | O_BINARY,
                    SH_DENYNONE, S_IREAD | S_IWRITE))==-1)
   {
     cant_open(temp);
     return;
   }
 
-  write(bfile, (char *)bstats, sizeof(struct _bbs_stats));
+#ifdef UNIX
+  if (lock_bbstats(bfile, 1) != 0)
+  {
+    close(bfile);
+    return; /* leave prior contents intact rather than corrupt */
+  }
+#endif
+
+  if (lseek(bfile, 0L, SEEK_SET) == -1L ||
+      ftruncate(bfile, 0) != 0 ||
+      write(bfile, (char *)bstats, sizeof(struct _bbs_stats)) != (int)sizeof(struct _bbs_stats))
+  {
+    /* best-effort; unlock below */
+  }
+
+#ifdef UNIX
+  flock(bfile, LOCK_UN);
+#endif
   close(bfile);
 }
 

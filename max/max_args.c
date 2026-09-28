@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_args.c,v 1.10 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_args.c,v 1.3 2003/06/05 23:37:19 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Command-line argument processing code
 */
@@ -151,22 +149,16 @@ void Parse_Args(char *ctlname,int argc,char *argv[])
   p2=strrchr(prmname,'\\');
 
   if (p2==NULL)
-  {
     p2=strrchr(prmname,'/');
-  }
-  
+
   if (p1)             /* There might be an extension */
-  {
     if (p2)           /* There IS a path */
     {
       if (p2 < p1)    /* Path delim was BEFORE '.', so must be extension */
         *p1='\0';
     }
-    else
-    { 
-	*p1='\0';    /* No path, so chop it off */
-    }
-  }
+    else *p1='\0';    /* No path, so chop it off */
+
   strcpy(ctlname, cfancy_fn(prmname));
 #ifndef UNIX
   strcat(ctlname, ".Ctl");
@@ -206,7 +198,6 @@ byte getDynamicTaskNumber(int cleanup)
   {
     if (filename[0])
       unlink(filename);
-    return 0;
   }
 
   if (offsets && PRM(ipc_path))
@@ -258,6 +249,7 @@ static void near Parse_Single_Arg(char *arg)
         strcpy(szMcpPipe, arg+2);
         break;
 #endif
+
       case 'b':             /* Baud rate select */
         if ((baud=atol(arg+2)) != 0L)
         {
@@ -326,7 +318,6 @@ static void near Parse_Single_Arg(char *arg)
         current_baud=0;
         local=TRUE;
         waitforcaller=FALSE;
-	tcpip=1;
         break;
 
       case 'l':             /* Log file */
@@ -388,12 +379,7 @@ static void near Parse_Single_Arg(char *arg)
 #endif
 
       case 'p':             /* COM port */
-        if (arg[2] == 't')
-	{
-	    tcpip = TRUE;
-	    port=atoi(arg+3)-1;
-	}
-        else if (arg[2] != 'd')
+        if (arg[2] != 'd')
           port=atoi(arg+2)-1;
         else
         {
@@ -549,9 +535,6 @@ static void near Unknown_CmdParam(char *param)
 #ifdef OS_2                                         
   Lprintf("  -p<handle>   Com handle                 -y<info>    Extra modem connect info\n");
   Lprintf("  -pd<port>    Com port number\n");
-#elif UNIX
-  Lprintf("  -p<port_num> Com port number (modem)    -y<info>    Extra modem connect info\n");  
-  Lprintf("  -pt<ipcnum>  Start a TCP/IP task by using Unix sockets\n");
 #else
   Lprintf("  -p<port_num> Com port number            -y<info>    Extra modem connect info\n");
 #ifdef __MSDOS__

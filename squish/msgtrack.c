@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: msgtrack.c,v 1.5 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: msgtrack.c,v 1.1.1.1 2002/10/01 17:56:06 sdudley Exp $";
+#pragma on(unreferenced)
 
 /* Copyright 1992 by Lanius Corporation.
    Portions copyright 1987-1991 by Bit Bucket Software.
@@ -35,9 +37,9 @@
 #include <share.h>
 #include <os2.h>
 #include <time.h>
+#include "msgtrack.h"
 #include "msgapi.h"
 #include "sqfeat.h"
-#include "msgtrack.h"
 
 typedef NETADDR *NETADDRP;
 
@@ -47,22 +49,22 @@ static USHORT fKill=FALSE;                  /* Kill bounced msgs? */
 void (cdecl far *pfnLogMsg)(char far *line);/* Write to Squish log. */
 
 
-union _stampu * _fast TmDate_to_DosDate(struct tm *tmdate,
-                                             union _stampu *dosdate)
+union stamp_combo * _fast TmDate_to_DosDate(struct tm *tmdate,
+                                             union stamp_combo *dosdate)
 {
-  dosdate->date.da=tmdate->tm_mday;
-  dosdate->date.mo=tmdate->tm_mon+1;
-  dosdate->date.yr=tmdate->tm_year-80;
+  dosdate->msg_st.date.da=tmdate->tm_mday;
+  dosdate->msg_st.date.mo=tmdate->tm_mon+1;
+  dosdate->msg_st.date.yr=tmdate->tm_year-80;
 
-  dosdate->time.hh=tmdate->tm_hour;
-  dosdate->time.mm=tmdate->tm_min;
-  dosdate->time.ss=tmdate->tm_sec >> 1;
+  dosdate->msg_st.time.hh=tmdate->tm_hour;
+  dosdate->msg_st.time.mm=tmdate->tm_min;
+  dosdate->msg_st.time.ss=tmdate->tm_sec >> 1;
 
   return dosdate;
 }
 
 
-union _stampu * _fast Get_Dos_Date(union _stampu *st)
+union stamp_combo * _fast Get_Dos_Date(union stamp_combo *st)
 {
   time_t timeval;
   struct tm *tim;
@@ -133,7 +135,7 @@ static struct _ndx * near get7node(int stream, dword pos, struct _ndx *ndx)
 {
   lseek (stream, (long) pos, SEEK_SET);
 
-  if (read(stream, (char *)ndx, NDX_SIZE) != NDX_SIZE)
+  if (read(stream, (char *)ndx, sizeof(struct _ndx)) != sizeof(struct _ndx))
   {
     close(stream);
     return NULL;
@@ -168,8 +170,8 @@ static long near btree(char *filename, void *desired, int (near *compare)(void *
     return (-1L);                            /* no file, no work to do */
   }
 
-  if ((nodeidx=malloc(NDX_SIZE))==NULL ||
-      (noderef=malloc(NDX_SIZE))==NULL)
+  if ((nodeidx=malloc(sizeof(struct _ndx)))==NULL ||
+      (noderef=malloc(sizeof(struct _ndx)))==NULL)
   {
     if (nodeidx)
       free(nodeidx);

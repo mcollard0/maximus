@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: s_pack.c,v 1.13 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: s_pack.c,v 1.3 2003/06/05 23:17:22 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #define NOVARS
 /*#define NO_MSGH_DEF*/
@@ -38,7 +40,6 @@
 #include "msgapi.h"
 #include "squish.h"
 #include "s_pack.h"
-
 /*#include "api_sdm.h"*/
 
 static char area_col[]="AREA:";
@@ -111,7 +112,9 @@ static void near PackIt(struct _cfgarea *ar)
   else S_LogMsg(":  Packed=%ld",n_packed);
 }
 
-#if defined(OS_2) || defined(UNIX)
+
+
+#ifdef OS_2
 /* Call all of the external DLL features */
 
 static word near InvokeFeatures(HAREA ha, HMSG hmsg, XMSG *pMsg, char *pCtrl,
@@ -216,14 +219,14 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
   if ((mh=MsgOpenMsg(sq, MOPEN_RW, *mn))==NULL)
   {
     if (msgapierr != MERR_NOENT)
-      S_LogMsg("!Can't open netmail msg #%lu (err#%d)", (unsigned long) *mn, msgapierr);
+      S_LogMsg("!Can't open netmail msg #%lu (err#%d)", *mn, msgapierr);
 
     return TRUE;
   }
 
   if (MsgGetTextLen(mh) >= maxmsglen)
   {
-    S_LogMsg("!Message %lu too large to pack (%#lx)", (unsigned long) *mn, (long)maxmsglen);
+    S_LogMsg("!Message %lu too large to pack (%#lx)", *mn, (long)maxmsglen);
     (void)MsgCloseMsg(mh);
     return TRUE;
   }
@@ -233,7 +236,7 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
   if ((ctrl=malloc(ctlen+5))==NULL ||
       (msgbuf=(char *)malloc(maxmsglen + ctlen + 180u))==NULL)
   {
-    S_LogMsg("!Not enough memory to pack msg %lu", (unsigned long) *mn);
+    S_LogMsg("!Not enough memory to pack msg %lu", *mn);
 
     if (ctrl)
       free(ctrl);
@@ -260,7 +263,7 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
   {
     /* do not pack, but call DLL handler anyway */
 
-#if defined(OS_2) || defined(UNIX)
+#ifdef OS_2
     (void)InvokeFeatures(sq, mh, &msg, ctrl, msgbuf, mn, &dokill, &logkill,
                          &rewriteit);
 #endif
@@ -306,7 +309,7 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
 
     /* If the DLL says it's okay to process this msg */
 
-#if defined(OS_2) || defined(UNIX)
+#ifdef OS_2
     if (InvokeFeatures(sq, mh, &msg, ctrl, msgbuf, mn, &dokill, &logkill,
                        &rewriteit))
 #endif
@@ -324,7 +327,7 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
         if ((msg.attr & MSGLOCAL)==0 && !OkToForward(&msg))
         {
           if ((config.flag2 & FLAG2_QUIET)==0)
-            (void)printf("Not forwarded: #%lu\n", (unsigned long) *mn);
+            (void)printf("Not forwarded: #%lu\n", *mn);
 
           n_notsent++;
         }
@@ -369,7 +372,7 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
               }
 
               TrackMessage(&msg, ctrl);
-              AddViaLine(msgbuf, ctrl, msg);
+              AddViaLine(msgbuf, ctrl);
 
               /* Now kill in-transit netmail */
 
@@ -379,7 +382,7 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
 
             /* Bo: we also add via lines to messages which come from here */
 	    if (msg.attr & MSGLOCAL)
-	      AddViaLine(msgbuf, ctrl, msg);
+	      AddViaLine(msgbuf, ctrl);
 
             front=msgbuf;
 
@@ -411,11 +414,11 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
             }
 
             /* Only write zone/point kludge lines if NOT doing gaterouting */
-	    
+
             if (! GateRouteMessage(&msg, *mn, &olddest))
               (void)WriteZPInfo(&msg, AddToMsgBuf, ctrl);
 
-/*            S_LogMsg("@Sending message %ld to %s",
+            /*S_LogMsg("@Sending message %ld to %s",
                      (long)*mn, Address(&msg.dest));*/
 
             if (Send_Message(mh, &msg, bytes, *mn, ar))
@@ -440,7 +443,7 @@ static unsigned near Pack_Netmail_Msg(HAREA sq, dword *mn, struct _cfgarea *ar)
   
   if (rewriteit)
   {
-/*    S_LogMsg("@Message #%ld has SENT bit set: %s", (long)*mn,
+    /*S_LogMsg("@Message #%ld has SENT bit set: %s", (long)*mn,
              (msg.attr & MSGSENT) ? "yes" : "no!!!!!!!!!!!!!");*/
 
 
@@ -617,16 +620,13 @@ static void near TrackMessage(XMSG *msg, byte *ctrl)
 
 /* Add a ^aVia line to the end of a netmail message */
 
-static void near AddViaLine(byte *mbuf, byte *ctrl, XMSG xmsg)
+static void near AddViaLine(byte *mbuf, byte *ctrl)
 {
   NETADDR n;
   time_t gmt;
   struct tm *lt;
   byte temp[160], *s;
   char *artag;
-  int match = FALSE;
-  
-  struct _sblist * tmps;
   
   /* Now tack on the "^aVia" line, if not an echomail message */
 
@@ -640,32 +640,18 @@ static void near AddViaLine(byte *mbuf, byte *ctrl, XMSG xmsg)
   lt=gmtime(&gmt);
 
   /* ^aVia SquishMail 1:249/106.0, Sat Oct 13 1990 at 07:33 UTC\r */
-  
-  /* Bo: Added new Via: */
-  /* ^aVia 2:236/100 @20030723.160020.UTC Squish/Linux 1.11\r */
-  
-  for(tmps=config.addr; tmps; tmps=tmps->next)
-    if(tmps->zone == xmsg.dest.zone)
-    {
-	break;
-	match = TRUE;
-    }
-    
-  if(!match)
-  {
-    tmps = config.addr;
-  }
-  
+
   (void)sprintf(temp,
-                "\x01Via %s @%04d%02d%02d.%02d%02d%02d.UTC " SQNAME " " SQVERSION "\r",
-                Address(SblistToNetaddr(tmps, &n)),
+                "\x01Via " SQNAME " %s %s, "
+                  "%s %s %02d %d at %02d:%02d UTC\r",
+                version,
+                Address(SblistToNetaddr(config.addr, &n)),
+                weekday_ab[lt->tm_wday],
+                months_ab[lt->tm_mon],
+                lt->tm_mday,
                 lt->tm_year+1900,
-		lt->tm_mon+1,
-		lt->tm_mday,
                 lt->tm_hour,
-                lt->tm_min,
-		lt->tm_sec
-		);
+                lt->tm_min);
 
 
   /* Set 's' to last character of message buffer */
@@ -833,7 +819,7 @@ static int near GateRouteMessage(XMSG *msg,dword mn,NETADDR *olddest)
       {
         if ((config.flag2 & FLAG2_QUIET)==0)
         {
-          (void)printf("GateRoute #%lu: %s -> ", (unsigned long) mn, Address(&msg->dest));
+          (void)printf("GateRoute #%lu: %s -> ", mn, Address(&msg->dest));
           (void)printf("%s\n", Address(SblistToNetaddr(&gr->host,&tempnet)));
         }
 
@@ -878,15 +864,8 @@ static int near Send_Message(HMSG mh, XMSG *msg, dword bytes, dword mn, struct _
   NW(mh);
 
   if ((config.flag2 & FLAG2_QUIET)==0)
-  {
-    (void)printf("Sending (#%lu): %s (%s)", (unsigned long) mn, Address(&msg->dest), 
-		 (msg->attr & MSGCRASH ? "CRASH" : 
-		 (msg->attr & MSGHOLD ? "HOLD" : "NORMAL" )));
+    (void)printf("Sending (#%lu): %s", mn, Address(&msg->dest));
 
-    S_LogMsg(" Netmail Message (#%lu) to %s (%s)", (unsigned long) mn, Address(&msg->dest), 
-		 (msg->attr & MSGCRASH ? "CRASH" : 
-		 (msg->attr & MSGHOLD ? "HOLD" : "NORMAL" )));
-  }
 
   (void)NetaddrToSblist(&msg->dest, &scanto);
 
@@ -970,8 +949,7 @@ void HandleAttReqPoll(word action, byte **toscan)
 
     if (eqstri(*p, "to") || eqstri(*p, "from"))
       p++;
-  } 
-    
+  }
 
   if (! *p)
     usage();
@@ -987,6 +965,7 @@ void HandleAttReqPoll(word action, byte **toscan)
 
   if (*p)
     msg.attr |= (dword)FlavourToMsgAttr(**p);
+
 
   /* Tell the user about what we're doing */
 
@@ -1008,9 +987,7 @@ void HandleAttReqPoll(word action, byte **toscan)
 static void near Process_AttReqUpd(XMSG *msg, char *filename, word manual)
 {
   FFIND *ff;
-#ifdef OLDSTYLE
   char tname[PATHLEN];
-#endif
   char pwd[PATHLEN];
   
   #define TFL_NONE  0
@@ -1059,19 +1036,14 @@ static void near Process_AttReqUpd(XMSG *msg, char *filename, word manual)
   
     if (!manual && *filename)
     {
-#ifndef UNIX    
       if (filename[1] != ':' && !strchr(filename,'\\')) /* wes - not changing; \\ is in packet (?) */
-#else
-      if (filename[1] != ':' && !strchr(filename,'/')) /* wes - not changing; \\ is in packet (?) */
-#endif
       {
-#ifdef OLDSTYLE
         struct _tosspath *tp, *lasttp;
 
 
         /* Check all of the tosspaths to see if it's there */
 
-	for (tp=config.tpath, lasttp=tp; tp; lasttp=tp, tp=tp->next)
+        for (tp=config.tpath, lasttp=tp; tp; lasttp=tp, tp=tp->next)
         {
           (void)sprintf(tname, "%s" PATH_DELIMS "%s", tp->path, filename);
 	  fixPathMove(tname);
@@ -1083,6 +1055,7 @@ static void near Process_AttReqUpd(XMSG *msg, char *filename, word manual)
           }
         }
 
+
         /* If not found, default to the main toss path */
 
         if (!tp)
@@ -1090,7 +1063,6 @@ static void near Process_AttReqUpd(XMSG *msg, char *filename, word manual)
           (void)sprintf(tname, "%s" PATH_DELIMS "%s", lasttp->path, filename);
           filename=fixPath(tname);
         }
-#endif
       }
     }
 
@@ -1098,7 +1070,7 @@ static void near Process_AttReqUpd(XMSG *msg, char *filename, word manual)
 
     /* Try to find file */
 
-    if ((ff=FindOpen(filename, 0))==NULL || !(*filename))
+    if ((ff=FindOpen(filename, 0))==NULL)
       Process_OneAttReqUpd(msg, filename, tflag, filename, pwd);
     else
     {

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_main.c,v 1.6 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_main.c,v 1.2 2003/06/04 23:46:22 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Main menu functions and commands
 */
@@ -276,8 +274,8 @@ static void near Max_Version(void)
 #endif
 
   Puts(CLS);
-
-  Printf(slogan, LMAGENTA, version, test);
+  Puts(LMAGENTA);
+  Printf("MAXIMUS-CBCS %s%s\n", version, test);
   Puts(copyright);
   Puts(dev_info);
 
@@ -287,6 +285,9 @@ static void near Max_Version(void)
          gkey_info+strlen(gkey_info)+1,
          gkey_info);
 #endif
+  Puts(WHITE);
+  Press_ENTER();
+  Puts(CLS);
 
   /* Now tell user when we were compiled */
 
@@ -453,7 +454,7 @@ static void near Max_Version(void)
   {
     struct utsname name;
 
-    if (uname(&name) != -1) /* Don't change this */
+    if (uname(&name) == 0)
       Printf("%s %s, running on %s hardware (%s)\n", name.sysname, name.release, name.machine, name.nodename);
     else
       Printf("Unknown UNIX-type platform\n");

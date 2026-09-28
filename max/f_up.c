@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: f_up.c,v 1.5 2004/01/27 21:00:29 paltas Exp $";
+static char rcs_id[]="$Id: f_up.c,v 1.2 2003/06/04 23:20:16 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=File area routines: U)pload command and associated functions
 */
@@ -111,7 +109,6 @@ void File_Upload(char *mname)
   }
 
   Printf(bytes_for_ul, commaize(b_free-(long)prm.k_free*1000L, temp));
-
 
   if (local)
   {

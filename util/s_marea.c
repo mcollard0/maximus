@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: s_marea.c,v 1.5 2004/01/27 23:02:55 paltas Exp $";
+static char rcs_id[]="$Id: s_marea.c,v 1.1.1.1 2002/10/01 17:57:46 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=SILT: 'Section Area' processing logic
 */
@@ -266,6 +264,7 @@ static void near assert_msgarea(char *path, word type, word killbyage,
   MsgCloseArea(ha);
 }
 
+
 static void near MsgAreaWrite(MAINFO *pmi, int closeit)
 {
   static int mai_fd=-1;
@@ -315,9 +314,7 @@ static void near MsgAreaWrite(MAINFO *pmi, int closeit)
   if (ma_fd==-1 && !closeit)
   {
     char fname[PATHLEN];
-    dword dwId;
-    
-    dwId =MAREA_ID;
+    dword dwId=MAREA_ID;
 
     if (strings[prm.marea_name]==0)
     {
@@ -337,7 +334,7 @@ static void near MsgAreaWrite(MAINFO *pmi, int closeit)
       exit(1);
     }
 
-    if (write(ma_fd, (char*) &dwId, sizeof dwId) != sizeof dwId)
+    if (write(ma_fd, (char *)&dwId, sizeof dwId) != sizeof dwId)
     {
       printf("\aError writing key to msg data file %s\n", fname);
       exit(1);
@@ -521,9 +518,7 @@ int ParseMsgArea(FILE *ctlfile, char *name)
 
     HeapAdd(&mi.h, &mi.ma.name, fullname);
 
-#ifdef MAX_TRACKER
     *toNewOwner=0;
-#endif
   }
 
   while (fgets(line, PATHLEN, ctlfile))

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: mb_qwkup.c,v 1.12 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: mb_qwkup.c,v 1.2 2003/06/04 23:46:22 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif 
 
 /*# QWK uploads, for processing .REP packets
 */
@@ -39,7 +37,6 @@ static char rcs_id[]="$Id: mb_qwkup.c,v 1.12 2004/01/28 06:38:10 paltas Exp $";
 #include <sys/stat.h>
 #include <share.h>
 #include <ctype.h>
-#include <unistd.h>
 #include "prog.h"
 #include "max_msg.h"
 #include "max_file.h"
@@ -88,8 +85,7 @@ void QWK_Upload(void)
     logit(mem_none);
   else
   {
-    memset(msg_name, 0, PATHLEN);
-    strcat(msg_name, PRM(olr_name));
+    strcpy(msg_name, PRM(olr_name));
     strcat(msg_name, dot_msg);
 
 
@@ -163,9 +159,8 @@ static int near Receive_REP(char *name)
 
   sprintf(temp, ss, PRM(olr_name), dot_rep);
 
-#ifndef UNIX
   upper_fn(temp);
-#endif
+  
 
   /* Save the current time */
 
@@ -241,9 +236,6 @@ static int near Receive_REP(char *name)
     Puts(xferaborted);
   else
   {
-#ifdef UNIX
-    adaptcase(name);
-#endif    
     if (fexist(name))
       return 0;
     else
@@ -265,6 +257,7 @@ static int near Decompress_REP(char *rep_name)
   struct _arcinfo *ai;
   int ret, fd, ctr;
   static char qwk_busy[]="qwk_busy.$$$";
+  
   Load_Archivers();
 
 
@@ -313,7 +306,6 @@ static int near Decompress_REP(char *rep_name)
                     SH_DENYNO, S_IREAD | S_IWRITE)) != -1)
         close(fd);
 
-
       ret=Outside(NULL, NULL, OUTSIDE_RUN, cmd, FALSE, CTL_NONE, 0, NULL);
 
       sprintf(temp, ss, qwk_path, msg_name);
@@ -326,10 +318,6 @@ static int near Decompress_REP(char *rep_name)
       unlink(qwk_busy);
     }
   }
-
-  #ifdef UNIX
-  adaptcase(msg_name);
-  #endif
 
   if (ret != 0 || !fexist(msg_name))
   {
@@ -357,11 +345,8 @@ static int near Toss_QWK_Packet(char *name)
   int qfd, ret;
 
   ret=0;
-#ifndef UNIX
+  
   upper_fn(name);
-#else
-  adaptcase(name);
-#endif
 
   Printf(tossing_rep_packet, No_Path(name));
   
@@ -636,33 +621,34 @@ static int near QWKRetrieveAreaFromPkt(PXMSG msg, struct _qmhdr *qh, char *aname
 {
   word tossto;    /* Area (cardinal #) in which to place msg */
 
+  /* "& 0xff" needed for EZ-Reader */
+
+  qh->conf &= 0xff;
+
+  /* If conference field not filled it, grab it from the ASCII stuff */
+
+  if (qh->conf==0 || qh->conf==' ')
+    qh->conf=atoi(qh->msgn);
+
+  /* Now figure out which area we have to toss to.  This involves some    *
+   * really ugly conversion between the QWK one-byte message numbers,     *
+   * and the ten-character Maximus area names.                            */
+
+  tossto=qh->conf-1;
+  
+  
   /* Skip any deleted messages, or those messages which are addressed     *
    * to the Maximus "control program".                                    */
   
   if (qh->msgstat==QWK_KILLED || eqstri(msg->to, cprog_name))
     return FALSE;
 
-  /* New method -- prefer ASCII version */
-
-  tossto=atoi(qh->msgn);
-  
-  /* Otherwise, use the low byte of the binary conference number (omitting
-   * the high byte for the benefit of EZ-Reader, per old method's comments;
-   * check this) */
-
-  if (!tossto)
-    tossto=qh->confLSB;
-
   /* Now state what we're doing */
 
-  Printf(qwk_msg_stats, tossto, msg->to, msg->subj);
+  Printf(qwk_msg_stats, (int)qh->conf, msg->to, msg->subj);
 
-  /* Adjust to internal offset */
 
-  tossto--;
-
-  /* Get area name based on offset.
-   * If the area number is too high, get a new area from the user. */
+  /* If the area number is too high, get a new area from the user. */
 
   strcpy(aname, (tossto >= akh.num_areas) ? qmark : (char *)(akd[tossto].name));
 
@@ -687,12 +673,8 @@ static int near QWKGetValidArea(PXMSG msg, char *aname, word tossto)
          !ReadMsgArea(ham, aname, &ma) ||
          !ValidMsgArea(NULL, &ma, VA_VAL | VA_PWD, &bi) ||
          !PopPushMsgArea(aname, &bi) ||
-	 #ifndef UNIX
          ((mah.ma.attribs & MA_READONLY) && !mailflag(CFLAGM_RDONLYOK)) ||
          !CanAccessMsgCommand(&mah, msg_upload, 0))
-	 #else
-         ((mah.ma.attribs & MA_READONLY) && !mailflag(CFLAGM_RDONLYOK)))
-	 #endif	 
   {
     Printf(qwk_invalid_area, msg->to, msg->subj);
 
@@ -785,9 +767,7 @@ static int near QWKTossMsgBody(PXMSG msg, struct _qmhdr *qh, int msg_blocks, int
 
   *pfUpdateStatus=FALSE;  /* We were not just updating status */
   *pkludge=NULL;
-#ifdef MAX_TRACKER
   memset(&qti, 0, sizeof qti);
-#endif
 
   /* Fix the fields in the message header */
 

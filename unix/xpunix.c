@@ -11,21 +11,12 @@
  *  @date	June 5th, 2003
  *
  *  $Log: xpunix.c,v $
- *  Revision 1.4  2004/01/28 06:38:11  paltas
- *  Fixed compiler warnings, still Comdll missing, but I need to do some
- *  rewrite stuff there, so it will be fixed later.
- *
- *  Revision 1.3  2004/01/27 21:03:54  paltas
- *  Fixed localmode
- *
  *  Revision 1.1  2003/06/11 14:44:51  wesgarland
  *  Initial Revision
  *
  */
 
-#ifndef __GNUC__
-static char rcs_id[]="$Id: xpunix.c,v 1.4 2004/01/28 06:38:11 paltas Exp $";
-#endif
+static char rcs_id[]="$Id: xpunix.c,v 1.1 2003/06/11 14:44:51 wesgarland Exp $";
 
 #if defined(FLOCK_IS_FCNTL)
 /** Implement flock with fcntl.

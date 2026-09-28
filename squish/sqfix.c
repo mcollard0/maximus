@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: sqfix.c,v 1.6 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: sqfix.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #define NOVARS
 #define NOVER
@@ -204,7 +206,7 @@ static void near link_base(char *origname)
          read(sqd, (char *)&hdr, sizeof(hdr))==sizeof(hdr);
        pos=hdr.next_frame, mn++)
   {
-    if (read(sqd, (char *)&msg, XMSG_SIZE) != XMSG_SIZE)
+    if (read(sqd, (char *)&msg, sizeof(XMSG)) != sizeof(XMSG))
       ErrRead(name);
     
     rl[(size_t)mn].date.msg_st=((union stamp_combo *)&msg.date_arrived)->ldate
@@ -367,13 +369,13 @@ static void near rebuild_file(int old_sqd,MSG *new,char *bufr)
     {
       /* Make sure that we haven't overflowed the buffer */
 
-      if (! snuggle_up(bufr, SQHDR_SIZE, &got, old_sqd))
+      if (! snuggle_up(bufr, (ptrdiff_t)sizeof(SQHDR), &got, old_sqd))
         break;
 
 
       /* If we got something, move it to the header and see if it's ok */
       
-      memmove(&hdr, here, SQHDR_SIZE);
+      memmove(&hdr, here, sizeof(SQHDR));
 
       /* If the frame header is damaged... */
       
@@ -389,7 +391,7 @@ static void near rebuild_file(int old_sqd,MSG *new,char *bufr)
         continue;
       }
 
-      here += SQHDR_SIZE;
+      here += sizeof(SQHDR);
       
       /* Make sure that we haven't overflowed the buffer */
 
@@ -399,11 +401,11 @@ static void near rebuild_file(int old_sqd,MSG *new,char *bufr)
 
       /* Copy out the message header */
       
-      memmove(&msg, here, XMSG_SIZE);
+      memmove(&msg, here, sizeof(XMSG));
       
       /* Now jump to the control text */
       
-      here += XMSG_SIZE;
+      here += sizeof(XMSG);
 
       /* Make sure that it's as long as it really says it is */
       
@@ -465,7 +467,7 @@ static void near rebuild_file(int old_sqd,MSG *new,char *bufr)
     /* Seek back the size of one header, to allow for overlap */
 
     if (got==BSIZ)
-      lseek(old_sqd, -(signed long)SQHDR_SIZE+1, SEEK_CUR);
+      lseek(old_sqd, -(signed long)sizeof(SQHDR)+1, SEEK_CUR);
   }
 
 /* (void)tell(old_sqd);*/

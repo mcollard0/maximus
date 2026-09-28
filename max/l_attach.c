@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: l_attach.c,v 1.4 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: l_attach.c,v 1.1.1.1 2002/10/01 17:51:15 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 #define MAX_LANG_m_browse
 
@@ -104,7 +102,7 @@ void LFARecInit(LFA_REC * plfa,
   strnncpy(plfa->szFrom, szFrom, sizeof(plfa->szFrom));
   strnncpy(plfa->szFile, szFile, sizeof(plfa->szFile));
   plfa->uid = uid;
-  TmDate_to_DosDate(tim, (union _stampu*) &plfa->scDateAttached.ldate);
+  TmDate_to_DosDate(tim,&plfa->scDateAttached.ldate);
 }
 
 

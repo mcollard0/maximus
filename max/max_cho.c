@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_cho.c,v 1.5 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_cho.c,v 1.1.1.1 2002/10/01 17:51:32 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Chat Mode routines (overlayed).  Includes the chat itself, routines
     name=for reading IPCxx.BBS, and for processing inbound messages.
@@ -149,14 +147,20 @@ static struct _cgs * near ChatFindOpen(void)
     for (;;)
     {
       int tid;
+      char namebuf[PATHLEN];
 
+      /* ipc_x is lowercase on UNIX ("ipc%x.bbs"). Do not strupr() the
+       * name first — case-sensitive sscanf would never match and Who_Is_On
+       * would always be empty. */
+      strncpy(namebuf, ff->szName, sizeof(namebuf)-1);
+      namebuf[sizeof(namebuf)-1]='\0';
 #ifndef UNIX
-      strupr(ff->szName);
+      strupr(namebuf);
 #endif
 
       /* Grab the number out of this one */
 
-      if (sscanf(ff->szName, ipc_x, &tid)==1)
+      if (sscanf(namebuf, ipc_x, &tid)==1)
         cgs->tids[cgs->num_tid++]=tid;
 
       if (FindNext(ff) != 0)
@@ -340,7 +344,8 @@ void Who_Is_On(void)
 
   while (ChatFindNext(cgs, &tid, username, status, NULL))
   {
-    if (! tid)
+    /* Node 0 is valid on UNIX single-line (-n0). Skip only empty slots. */
+    if (!username[0])
       continue;
 
     Printf(hu_is_on_3, username, tid, status,

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: v7.c,v 1.6 2004/01/28 06:38:11 paltas Exp $";
+static char rcs_id[]="$Id: v7.c,v 1.2 2003/06/04 23:46:22 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Version 7 nodelist module
     credit=(C) Copyright 1987-91, Bit Bucket Software, a Delaware Corporation
@@ -43,11 +41,7 @@ static char rcs_id[]="$Id: v7.c,v 1.6 2004/01/28 06:38:11 paltas Exp $";
 #define get_nodelist_name(a) ;
 
 static char unwrk[] = " EANROSTILCHBDMUGPKYWFVJXZQ-'0123456789";
-#ifndef UNIX
 static char nodelist_base[]="NODEX";
-#else
-static char nodelist_base[]="nodex";
-#endif
 static size_t namelen;
 
 int V7FindNode(NETADDRP opus_addr, struct _newnode *node, char *net_info)
@@ -185,8 +179,8 @@ static long near btree(char *filename, void *desired, int (near *compare)(void *
                       S_IREAD|S_IWRITE))==-1)
       return (-1L);                            /* no file, no work to do */
 
-  if ((nodeidx=malloc(NDX_SIZE))==NULL ||
-      (noderef=malloc(NDX_SIZE))==NULL)
+  if ((nodeidx=malloc(sizeof(struct _ndx)))==NULL ||
+      (noderef=malloc(sizeof(struct _ndx)))==NULL)
   {
     if (nodeidx)
       free(nodeidx);
@@ -361,7 +355,7 @@ static int near get_ver7_info(unsigned long pos, NETADDRP faddr, struct _newnode
     return 0;
   }
 
-  if (read(stream, (char *)&vers7, VER7_SIZE) != VER7_SIZE)
+  if (read(stream, (char *)&vers7, sizeof vers7) != sizeof vers7)
   {
     close(stream);
     return 0;
@@ -440,7 +434,7 @@ static struct _ndx * near get7node(int stream, dword pos, struct _ndx *ndx)
 {
   lseek (stream, (long) pos, SEEK_SET);
 
-  if (read(stream, (char *)ndx, NDX_SIZE) != NDX_SIZE)
+  if (read(stream, (char *)ndx, sizeof(struct _ndx)) != sizeof(struct _ndx))
   {
     close(stream);
     return NULL;

@@ -179,12 +179,11 @@
   #endif
     
   ATTRIBUTES *curfn=NULL;
-  
-  #ifndef __GNUC__
+
   #pragma off(unreferenced)
-  static char rcs_id[]="$Id: mex_tab.y,v 1.4 2004/01/27 20:57:25 paltas Exp $";
+  static char rcs_id[]="$Id: mex_tab.y,v 1.2 2003/06/07 05:54:28 wesgarland Exp $";
   #pragma on(unreferenced)
-  #endif
+
 %}
 
 
@@ -240,25 +239,16 @@
 %left T_BPLUS T_MINUS  
 %left T_BMULTIPLY T_BDIVIDE T_BMODULUS
 
-%token T_CONSTBYTE
-%token T_CONSTWORD
-%token T_CONSTDWORD
-%token T_CONSTSTRING
-%token T_ID
+%token <constant> T_CONSTBYTE T_CONSTWORD T_CONSTDWORD T_CONSTSTRING
+%token <id> T_ID
 
-/*%type <dataobj> const_byte_p 
-%type <dataobj> const_word_p
-%type <dataobj> const_dword_p
-%type <dataobj> const_string_p*/
-
-%type <constant> const_byte_p 
-%type <constant> const_word_p
-%type <constant> const_dword_p
-%type <constant> const_string_p
-
-
-%type <constant> T_CONSTWORD T_CONSTBYTE T_CONSTDWORD T_CONSTSTRING
-%type <id> T_ID
+/* Pass CONSTTYPE by value through these intermediate productions.
+ * Taking & of a bison stack slot ($$ = &$1) and holding that pointer
+ * across a reduction is undefined; free(): invalid size on modern
+ * x86_64 glibc/bison was the symptom. Call byteref/stringref with &$1
+ * only inside the same action where the CONSTTYPE still lives.
+ */
+%type <constant> const_byte_p const_word_p const_dword_p const_string_p
 
 %%
 
@@ -513,7 +503,7 @@ else_part       :       /* epsilon */
                                   $$.else_label=this_quad;
                                 }
                 |       T_ELSE 
-                                { ElseHandler(&$$); }
+                                { ElseHandler(&$<elsetype>$); }
                         statement
                                 { $$=$<elsetype>2; }
                 ;

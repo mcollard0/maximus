@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: fos_os2.c,v 1.13 2004/06/07 17:41:31 paltas Exp $";
+static char rcs_id[]="$Id: fos_os2.c,v 1.3 2003/06/06 01:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=FOSSIL interface routines (OS/2)
 */
@@ -176,11 +174,6 @@ static char rcs_id[]="$Id: fos_os2.c,v 1.13 2004/06/07 17:41:31 paltas Exp $";
       return !local && ComInCount(hcModem);
     }
 
-    int mdm_nowonline()
-    {
-	ModemComIsOnlineNow(hcModem);
-    }
-
     int mdm_baud(int bod)
     {
       static struct
@@ -251,8 +244,7 @@ if (ComIsAModem(hcModem))
 
     int mdm_blockwrite(int max_chars, char *offset)
     {
-    
-      //max_chars=min(ComOutSpace(hcModem), max_chars);
+      max_chars=min(ComOutSpace(hcModem), max_chars);
 
       if (!max_chars)
         return 0;
@@ -270,25 +262,26 @@ if (ComIsAModem(hcModem))
     int mdm_blockread(int max_chars, char *offset)
     {
       #if defined(NT) || defined(UNIX)
-        DWORD cbBytesRead = 0;
+        DWORD cbBytesRead;
       #else
-        USHORT cbBytesRead = 0;
+        USHORT cbBytesRead;
       #endif
 
-      #if !defined(NT) && !defined(UNIX)
+      #if 1
+        ComRead(hcModem, offset, max_chars, &cbBytesRead);
+      #else
         char *p=offset;
         char *e=p+max_chars;
         int ch;
 
         while (p < e)
           if ((ch=ComGetc(hcModem)) != -1)
-    	    *p++=(byte)ch;
+            *p++=(byte)ch;
           else break;
 
         cbBytesRead=p-offset;
-      #else      
-        ComRead(hcModem, offset, max_chars, &cbBytesRead);
       #endif
+
       return (int)cbBytesRead;
     }
 
@@ -426,6 +419,4 @@ if (ComIsAModem(hcModem))
 /*  #endif */ /* ORACLE */
 
 #endif /* OS_2 || NT */
-
-/* works with output, but no input... */
 

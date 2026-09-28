@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: mb_novl.c,v 1.5 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: mb_novl.c,v 1.1.1.1 2002/10/01 17:52:12 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Message Section: "root" overlay code for B)rowse command
 */
@@ -335,7 +333,7 @@ int Browse_Scan_Areas(BROWSE *b)
   int ret, rc;
   int colour=0, stop, bret;
   word ixnum;
- 
+
   memset(&ma, 0, sizeof ma);
 
   display_line=display_col=1;

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_wfc.c,v 1.13 2004/06/06 21:48:51 paltas Exp $";
+static char rcs_id[]="$Id: max_wfc.c,v 1.3 2003/06/06 01:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Waiting-for-caller routines
 */
@@ -58,7 +56,7 @@ static void near WFCMaxBaud(void)
 void Wait_For_Caller(void)
 {
   char *rsp;
-  
+
   startbaud=baud;
   strcpy(usrname, us_short);
   ChatSetStatus(FALSE, cs_wfc);
@@ -71,20 +69,18 @@ void Wait_For_Caller(void)
   if (ComIsAModem(hcModem))
   {
 #endif
-  while ((rsp=Get_Modem_Response()) != NULL)
+    while ((rsp=Get_Modem_Response()) != NULL)
+    {
       if (Process_Modem_Response(rsp))
-            break;
+	break;
+    }
 #if (COMMAPI_VER > 1)
   }
   else
   {
     while(!ComIsOnline(hcModem))
-    {
-      WFC_IdleInternal();
-      if(local || kexit|| do_next_event)
-        break;
-      //usleep(250000);
-    }
+      usleep(250000);
+
     ComTxWait(hcModem, 1000);
     goto letsgo;
   }
@@ -256,8 +252,7 @@ static char * near Get_Modem_Response(void)
     {
       #ifndef __MSDOS__
       if (!loc_kbhit())
-          if(ComIsAModem(hcModem))
-            ComRxWait(hcModem, 1000L);  /* block for 1 second or until char avail*/
+          ComRxWait(hcModem, 1000L);  /* block for 1 second or until char avail*/
       #endif
 
       if (! mdm_avail())
@@ -289,8 +284,8 @@ static char * near Get_Modem_Response(void)
 
     /* Suppress any 'OK' messages */
 
-/*    if (eqstri(resp,"ok"))
-      *resp='\0';*/
+    if (eqstri(resp,"ok"))
+      *resp='\0';
 
     /* Reset the modem initialization timer so that we don't
      * try to reinit in the middle of a ring!
@@ -329,6 +324,7 @@ static int near Process_Modem_Response(char *rsp)
   int gotarq=FALSE;
   char *s;
   
+
   if (eqstri(rsp, PRM(m_ring)))
   {
     if (*PRM(m_answer))
@@ -432,12 +428,6 @@ static int near Process_Modem_Response(char *rsp)
       mdm_dump(DUMP_ALL);
       Mdm_Flow(FLOW_ON);
     }
-
-    #ifdef UNIX
-	/* On UNIX we need to tell the comm api that our device
-	   has a carrier else WFC will be dancing with "No carrier" */
-	mdm_nowonline();
-    #endif
 
     if (!carrier())
     {
@@ -559,26 +549,16 @@ static int near WFC_IdleInternal(void)
   
 
   /* If it's time to reinitialize the modem, do so now. */
-#if (COMMAPI_VER > 1)  
-  if(ComIsAModem(hcModem))
+  
+  if (timeup(init_tmr))
   {
-    if (timeup(init_tmr))
-    {
-	WFC_Init_Modem();
-        Update_Status(wfc_waiting);
-	init_tmr=timerset(INIT_TIME);
-    }
-  
-    Check_For_Message(NULL, NULL);
+    WFC_Init_Modem();
+    Update_Status(wfc_waiting);
+    init_tmr=timerset(INIT_TIME);
   }
-#endif
-  
+
+  Check_For_Message(NULL, NULL);
   Giveaway_Slice();
-#if (COMMAPI_VER > 1)
-  if(ComIsAModem(hcModem))
-      sleep(1);
-#endif
-  
   return 0;
 }
 

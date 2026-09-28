@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: sq_read.c,v 1.4 2004/01/27 21:01:49 paltas Exp $";
+static char rcs_id[]="$Id: sq_read.c,v 1.2 2003/06/05 22:54:50 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 #define MSGAPI_HANDLERS
 #define MSGAPI_NO_OLD_TYPES
@@ -35,7 +33,7 @@ static char rcs_id[]="$Id: sq_read.c,v 1.4 2004/01/27 21:01:49 paltas Exp $";
 #include "api_sq.h"
 #include "apidebug.h"
 
-#include "structrw.h"
+
 
 /* Read in the binary message header from the data file */
 
@@ -50,7 +48,7 @@ static unsigned near _SquishReadXmsg(HMSG hmsg, PXMSG pxm, dword *pdwOfs)
       return FALSE;
     }
 
-  if (read_xmsg(HSqd->sfd, (XMSG *)pxm) != 1)
+  if (read_xmsg(HSqd->sfd, (char *)pxm) != 1)
   {
     msgapierr=MERR_BADF;
     return FALSE;

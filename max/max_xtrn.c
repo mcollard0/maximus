@@ -16,12 +16,11 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
- 
-#ifndef __GNUC__
+
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_xtrn.c,v 1.11 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_xtrn.c,v 1.2 2003/06/04 23:53:08 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
+
 #define MAX_LANG_max_chat
 #define MAX_INCL_COMMS
 
@@ -110,11 +109,7 @@ static char * near MakeFullPath(char *cmd)
 
   /* Now scan all directories on the path */
 
-#ifdef UNIX
   for (s=strtok(newpath, " ;"); s || last; s=strtok(NULL, " ;"))
-#else
-  for (s=strtok(newpath, ":"); s || last; s=strtok(NULL, ":"))
-#endif
   {
     if (s)
     {
@@ -137,7 +132,6 @@ static char * near MakeFullPath(char *cmd)
       return NULL;
     }
     
-#ifndef UNIX
     if (!fexist_maybehidden(this))
     {
       (void)strcpy(this, try);
@@ -157,7 +151,7 @@ static char * near MakeFullPath(char *cmd)
         }
       }
     }
-#endif
+
 
     /* Now tack on the rest of the command */
         
@@ -301,11 +295,6 @@ static char * near GetComspec(void)
 
   comspec=getenv("COMSPEC");
 
-#ifdef UNIX
-  if (!comspec)
-    comspec=getenv("SHELL");
-#endif
-
   if (!comspec)
 #if defined(__MSDOS__)
     comspec="command.com";
@@ -320,6 +309,7 @@ static char * near GetComspec(void)
   return comspec;
 }
 
+
 int Outside(char *leaving,char *returning,int method,char *parm,
             int slogan,int ctltype,char restart_type,
             char *restart_name)
@@ -327,6 +317,13 @@ int Outside(char *leaving,char *returning,int method,char *parm,
 
   struct _css *css;
   int tonline;
+#ifdef UNIX
+  /* Keep telnet socket open for RUN/DOS/CONCUR helpers (notify-send, etc.) */
+  int keep_socket = (method==OUTSIDE_RUN || method==OUTSIDE_DOS ||
+                    method==OUTSIDE_CONCUR);
+#else
+  int keep_socket = 0;
+#endif
 
   char **args=NULL, *temp, *temp2=NULL, *p, *s;
 
@@ -435,12 +432,15 @@ int Outside(char *leaving,char *returning,int method,char *parm,
   }
 
 
-  /* Disable the FOSSIL */
+  /* Disable the FOSSIL (except UNIX keep_socket — ComClose would hang up) */
 
-/*  if (!in_wfc)
-    Mdm_flush_ck_tic(4000, FALSE, TRUE);
+  if (!keep_socket)
+  {
+    if (!in_wfc)
+      Mdm_flush_ck_tic(4000, FALSE, TRUE);
 
-  mdm_deinit();*/
+    mdm_deinit();
+  }
 
 
   Out_Save_Directories(stay);
@@ -532,8 +532,8 @@ int Outside(char *leaving,char *returning,int method,char *parm,
         }
       }
 
-/*      if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
-        mdm_watchdog(1);*/
+      if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
+        mdm_watchdog(1);
 
       nowrite_lastuser=TRUE;
       quit(erl);
@@ -616,8 +616,8 @@ int Outside(char *leaving,char *returning,int method,char *parm,
       Out_Disable_Ctrlc();
     }
 
-/*    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
-      mdm_watchdog(1);*/
+    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
+      mdm_watchdog(1);
 
     IoPause();
 
@@ -630,15 +630,12 @@ int Outside(char *leaving,char *returning,int method,char *parm,
       erl=swapvp(args[0], args);
     else
   #endif
-  #ifndef UNIX
       erl=spawnvp(P_WAIT, args[0], args);
-  #else
-      erl=xxspawnvp(P_WAIT, args[0], args);
-  #endif
+
     IoResume();
 
-/*    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
-      mdm_watchdog(0);*/
+    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
+      mdm_watchdog(0);
 
     Reopen_Files();
 
@@ -684,8 +681,8 @@ Skip:
 
     Close_Files();
 
-/*    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
-      mdm_watchdog(1);*/
+    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
+      mdm_watchdog(1);
 
     IoPause();
 
@@ -697,11 +694,7 @@ Skip:
     if (prm.flags2 & FLAG2_SWAPOUT)
     {
       strcpy(temp, GetComspec());
-  #ifdef UNIX
-      strcat(temp, " -c ");
-  #else
       strcat(temp, " /c ");
-  #endif
       strcat(temp, parm);
 
       erl=swapsz(temp);
@@ -709,13 +702,13 @@ Skip:
       strcpy(temp, parm);
     }
     else
-      erl=system(temp);
   #endif
+      erl=system(temp);
 
     IoResume();
 
-/*    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
-      mdm_watchdog(0);*/
+    if ((prm.flags & FLAG_watchdog) && !local && !in_wfc)
+      mdm_watchdog(0);
 
     Reopen_Files();
 
@@ -777,13 +770,14 @@ RetProc:
   Restore_Directories3();
 #endif
 
-  Out_Reinstall_Fossil();
+  if (!keep_socket)
+    Out_Reinstall_Fossil();
   Out_Video_Up();
 
   display_line=display_col=1;
   inchat=save_inchat;
 
-//  mdm_attr=curattr=-1;
+  mdm_attr=curattr=-1;
   
   Puts(GRAY);
   
@@ -802,6 +796,12 @@ RetProc:
  
   return erl;
 }
+
+
+
+
+
+
 
 
 static void near Out_Save_Directories(int stay)
@@ -989,9 +989,9 @@ static void near Out_Reinstall_Fossil(void)
    * there, and that an external program didn't borrow our interrupt *
    * vector, and forget to give it back.  (How rude!)                */
 
-/*  mdm_deinit();
+  mdm_deinit();
   Fossil_Install(FALSE);
-  Mdm_Flow_On();*/
+  Mdm_Flow_On();
 }
 
 
@@ -1098,8 +1098,8 @@ void Shell_To_Dos(void)
   Outside(NULL, NULL, OUTSIDE_RUN, GetComspec(), FALSE, CTL_NONE,
           RESTART_MENU, NULL);
 
-  if (!in_wfc)
-    Lputs(CLS);
+/*if (!in_wfc)
+    Lputs(CLS);*/
 
   if (*PRM(backfromdos) && !in_wfc)
     Display_File(0, NULL, PRM(backfromdos));

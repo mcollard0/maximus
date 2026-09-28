@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: disp_dat.c,v 1.4 2004/01/27 21:00:26 paltas Exp $";
+static char rcs_id[]="$Id: disp_dat.c,v 1.2 2003/06/04 23:12:08 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=.BBS-file display routines (ctrl-F data codes)
 */
@@ -62,32 +60,79 @@ word DisplayDatacode(DSTK *d)
       if ((quotefile=shfopen(d->scratch, fopen_read, O_RDONLY))==NULL)
         return 0;
 
-      do
+      /* Blank-line-separated quotes.  Build a list of absolute start
+       * offsets for each complete quote, then pick one at random (or
+       * advance bstats.quote_pos sequentially as a fallback seed).
+       * Never print from mid-quote — that produced fragments such as
+       * "that the competition already has the order."
+       */
       {
-        fseek(quotefile, bstats.quote_pos, SEEK_SET);
+        long starts[2048];
+        int nstarts=0;
+        long pos=0L;
+        int at_start=TRUE;
 
-        while ((p=fgets(d->scratch, PATHLEN, quotefile)) != NULL)
+        fseek(quotefile, 0L, SEEK_SET);
+        while (nstarts < (int)(sizeof starts / sizeof starts[0]) &&
+               fgets(d->scratch, PATHLEN, quotefile) != NULL)
         {
+          long after=ftell(quotefile);
           Trim_Line(d->scratch);
 
           if (! *d->scratch)
-            break;
-
-          Printf("%s\n", d->scratch);
+          {
+            at_start=TRUE;          /* next non-empty line begins a quote */
+          }
+          else
+          {
+            if (at_start)
+            {
+              starts[nstarts++]=pos; /* pos is start of this non-empty line */
+              at_start=FALSE;
+            }
+          }
+          pos=after;
         }
 
-        if (!p)   /* end-of-file, so recycle to beginning */
-          bstats.quote_pos=0L;
-        else bstats.quote_pos=ftell(quotefile);
+        if (nstarts <= 0)
+        {
+          fclose(quotefile);
+          break;
+        }
 
-        d->skipcr=TRUE;
+        /* Prefer rotating index stored in shared bstats; mix with rand so
+         * concurrent nodes still diverge.
+         */
+        {
+          unsigned idx;
+          long qpos;
+          byte *p;
+
+          /* Sequential rotation via shared bbstats.bbs quote_pos index */
+          idx=(unsigned)(bstats.quote_pos % (dword)nstarts);
+          qpos=starts[idx];
+
+          fseek(quotefile, qpos, SEEK_SET);
+          while ((p=fgets(d->scratch, PATHLEN, quotefile)) != NULL)
+          {
+            Trim_Line(d->scratch);
+            if (! *d->scratch)
+              break;
+            Printf("%s\n", d->scratch);
+          }
+
+          /* Store next index (not byte offset) so sequential rotation works
+           * even when quotes have different lengths.
+           */
+          bstats.quote_pos=(dword)((idx + 1U) % (unsigned)nstarts);
+          d->skipcr=TRUE;
+        }
       }
-      while (!p);
 
       fclose(quotefile);
       break;
 
-    case 2:   /* User's name */
+case 2:   /* User's name */
       Puts(usrname);
       break;
 

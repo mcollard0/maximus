@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: ued_cmds.c,v 1.5 2004/01/28 06:38:11 paltas Exp $";
+static char rcs_id[]="$Id: ued_cmds.c,v 1.1.1.1 2002/10/01 17:53:20 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Internal user editor (miscellaneous commands)
 */
@@ -1296,7 +1294,7 @@ static int near UFileBusy(void)
 {
   FFIND *ff;
   char temp[PATHLEN];
-  unsigned int node, rc=FALSE;
+  int node, rc=FALSE;
 
   sprintf(temp, active_star, original_path);
 

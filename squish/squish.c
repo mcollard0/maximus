@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: squish.c,v 1.8 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: squish.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 /*#define TEST_VER*/
 #define INITSQUISH
@@ -45,7 +47,7 @@ static word old_emax;
 static int fRunZCore=FALSE;
 
 static struct _args ar={"", "squish.cfg", "", "", "",
-                        TRUE, ACTION_NONE, FALSE, 0, {0, 0, 0, 0}};
+                        TRUE, ACTION_NONE, FALSE, {NULL}, 0};
 
 #ifdef __TURBOC__
 unsigned int __stklen=32767;
@@ -61,14 +63,15 @@ int _stdc main(int argc, char *argv[])
 
   NW(__fd2n);
 
-#if defined(__FLAT__) && !defined(UNIX)
+
+#if !defined(UNIX)
+# if defined(__FLAT__)
   Hello("SQUISH/386", "SquishMail Conference Processor", version, "1990, " THIS_YEAR);
-#elif defined(LINUX)
-  Hello("SQUISH/LINUX", "SquishMail Conference Processor", version, "1990, " THIS_YEAR);
-#elif defined(UNIX)
-  Hello("SQUISH/UNIX", "SquishMail Conference Processor", version, "1990, " THIS_YEAR);
-#else
+# else
   Hello("SQUISH", "SquishMail Conference Processor", version, "1990, " THIS_YEAR);
+# endif
+#else
+  Hello("SQUISH/UNIX", "SquishMail Conference Processor", version, "1990, " THIS_YEAR);
 #endif
 
 #ifdef OS_2 /* Serialize Squish's execution */
@@ -85,11 +88,6 @@ int _stdc main(int argc, char *argv[])
 
 #ifdef DJ
   dj=fopen("dj.log", "a");
-#endif
-
-#ifdef UNIX
-  if (!getenv("SQUISH"))
-    putenv("SQUISH=" INSTALL_PREFIX "/etc/squish.cfg");
 #endif
 
   if (!fexist(ar.cfgname) && (p=getenv("SQUISH")) != NULL)
@@ -411,7 +409,7 @@ static void near ParseArgs(struct _args *ags, byte *argv[])
         mode |= MODE_link;
       else if (eqstri(*arg, "rescan"))
       {
-        mode|=MODE_scan;
+        mode=MODE_scan;
        
         if (arg[1]==NULL || arg[2]==NULL)
         {
@@ -425,8 +423,7 @@ static void near ParseArgs(struct _args *ags, byte *argv[])
         
         ags->action=ACTION_RESCAN;
         ags->toscan=arg+2;
-        //return;
-	arg += 2;
+        return;
       }
 #if 0
       else if (eqstri(*arg, "test"))

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: s_misc.c,v 1.5 2004/01/27 23:02:55 paltas Exp $";
+static char rcs_id[]="$Id: s_misc.c,v 1.2 2003/06/05 03:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=SILT: Miscellaneous routines
 */
@@ -583,10 +581,9 @@ int Add_To_Heap(char *s,int fancy)
     strcpy(strings+offset,s);
     old_ofs=offset;
     offset += strlen(s)+1;
-#ifndef UNIX
+
     if (fancy)
       fancy_fn(strings+old_ofs);
-#endif      
   }
 
   if (offset >= HEAP_SIZE)

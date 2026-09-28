@@ -17,21 +17,6 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/**
- * @file	brktrap.c
- * @author	Scott J. Dudley
- * @version	$Id: brktrap.c,v 1.3 2004/01/28 06:38:11 paltas Exp $
- *
- * $Log: brktrap.c,v $
- * Revision 1.3  2004/01/28 06:38:11  paltas
- * Fixed compiler warnings, still Comdll missing, but I need to do some
- * rewrite stuff there, so it will be fixed later.
- *
- * Revision 1.2  2003/06/18 02:03:15  wesgarland
- * Implemented DOS int 24h trap as a SIGINT/SIGTERM trap under UNIX
- *
- */
-
 /*# name=^c/^break trap functions
 */
 
@@ -43,9 +28,7 @@
 #include "typedefs.h"
 
 int brk_trapped=0;
-#ifndef UNIX
 static byte brk_is_trapped=0;
-#endif
 
 #if defined(__MSDOS__)
 
@@ -518,32 +501,15 @@ static byte brk_is_trapped=0;
   }
 
 #elif defined(UNIX)
-  #include <signal.h>
-
-  void BreakHandler(int sig)
-  {
-    brk_trapped++;
-  }
 
   void _fast brktrap(void)
   {
-    /* Handle SIGINT, TERM as if ^c or ^break were
-     * pressed on the DOS keyboard. If we wanted to
-     * a good job here, we'd use sigaction + the
-     * flag that lets system calls keep on trucking
-     * (SA_RESTART?) but I don't feel looking through
-     * the man pages (or digging up UNP1) for something
-     * that nobody is ever likely to notice. And the
-     * syntax escapes me at the moment.
-     */
-    signal(SIGINT, BreakHandler); 
-    signal(SIGTERM, BreakHandler); 
+    int fix_me_later;
   }
 
   void _stdc brkuntrap(void)
   {
-    signal(SIGINT, SIG_DFL);
-    signal(SIGTERM, SIG_DFL); 
+    int write_me_later;
   }
 
 #else

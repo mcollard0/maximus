@@ -17,27 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/**
- * @file	s_scan.c
- * @author	Scott J. Dudley
- * @version	$Id: s_scan.c,v 1.6 2004/01/22 08:04:28 wmcbrine Exp $
- *
- * $Log: s_scan.c,v $
- * Revision 1.6  2004/01/22 08:04:28  wmcbrine
- * Changed all the "static char rcs_id[]=" stuff to comments. Which works just
- * as well, but doesn't produce any warnings. :-)
- *
- * Revision 1.5  2004/01/13 00:42:14  paltas
- * Fixed compiler warnings
- *
- * Revision 1.4  2003/09/03 13:51:33  paltas
- * /Linux instead of /UNIX on Linux machines
- *
- * Revision 1.3  2003/06/18 01:58:26  wesgarland
- * Based on changes submitted by Bo Simonsen; modified to have lowercase extensions
- * for the ?ut filenames, where the ? is the mail flavour (FLO)
- *
- */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: s_scan.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -135,7 +117,7 @@ void Scan_Messages(char *etname, NETADDR *scan, time_t start)
   {
     (void)printf("\nScanned %lu messages (%lu.%lu/second) and "
                  "sent %lu (%lu.%lu/second)\n",
-                 (unsigned long)nmsg_scanned,
+                 nmsg_scanned,
                  (unsigned long)nmsg_scanned/secs,
                  (unsigned long)(nmsg_scanned*10Lu/secs) % 10Lu,
                  (unsigned long)nmsg_sent,
@@ -225,8 +207,7 @@ void Scan_Area(struct _cfgarea *ar, HAREA opensq)
 
   if ((config.flag2 & FLAG2_QUIET)==0)
     (void)printf("Scanning: %-30s (%05lu-%05lu)  -----",ar->name,
-                 (unsigned long) ((hwm+1 > hmsg) ? hmsg : hwm+1),
-		 (unsigned long) hmsg);
+                 ((hwm+1 > hmsg) ? hmsg : hwm+1),hmsg);
 
   if (hwm < hmsg)
   {
@@ -771,13 +752,12 @@ static void near PerformMessageUpdate(HAREA sq, struct _cfgarea *ar,
   HMSG hmsg;
   unsigned len;
   char *txt;
-  UMSGID uid_hwm;
-
-  memset(&uid_hwm, 0, sizeof(UMSGID));
 
   if (!do_modify)
   {
     /* If we're just killing the message, this is a simple job */
+
+    UMSGID uid_hwm;
 
     S_LogMsg("*  Remote delete: %s:%ld", ar->name, msgn);
 
@@ -1805,7 +1785,16 @@ static void near Add_Tear_Line(char *mbuf, struct _cfgarea *ar, XMSG *msg)
   else addrstr=Address(SblistToNetaddr(&ar->primary, &n));
 
   (void)sprintf(temp,
-                "\r--- " SQNAME " v" SQVERSION "\r * Origin: %s (%s)\r",
+#if defined(__FLAT__) || defined(UNIX)
+# if defined(UNIX)
+                "\r--- Squish/UNIX v%s\r * Origin: %s (%s)\r",
+# else
+                "\r--- Squish/386 v%s\r * Origin: %s (%s)\r",
+# endif
+#else
+                "\r--- Squish v%s\r * Origin: %s (%s)\r",
+#endif
+                version,
                 area_origin,
                 addrstr);
 
@@ -1989,7 +1978,7 @@ void Flush_Outbuf(void)
       else
       {
         (void)sprintf(pktname+strlen(pktname), "%cut",
-                      tolower((int)(bl->flavour ? bl->flavour : 'O')));
+                      bl->flavour ? bl->flavour : 'O');
       }
 
       BusyFileOpen(config, bl->zone, bl->net, bl->node, bl->point);

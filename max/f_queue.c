@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
 static char rcs_id[]="$id";
 #pragma on(unreferenced)
-#endif
 
 /*# name=File area routines: upload/download fileslist management
 */

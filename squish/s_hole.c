@@ -17,45 +17,12 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/**
- * @file	s_hole.c
- * @author	Scott J. Dudley
- * @version	$Id: s_hole.c,v 1.9 2004/01/22 08:04:28 wmcbrine Exp $
- *
- * $Log: s_hole.c,v $
- * Revision 1.9  2004/01/22 08:04:28  wmcbrine
- * Changed all the "static char rcs_id[]=" stuff to comments. Which works just
- * as well, but doesn't produce any warnings. :-)
- *
- * Revision 1.8  2004/01/13 00:42:14  paltas
- * Fixed compiler warnings
- *
- * Revision 1.7  2003/11/23 13:15:20  paltas
- *
- * Fixed flofile error..
- *
- * Revision 1.6  2003/11/18 22:50:50  paltas
- * Fixed attach netmail
- *
- * Revision 1.5  2003/09/03 13:51:33  paltas
- * /Linux instead of /UNIX on Linux machines
- *
- * Revision 1.4  2003/07/26 00:03:58  rfj
- * Squish (and MSGAPI) updates as suggested by Bo Simonsen, including correcting
- * a \ to / for UNIX systems, changes concerning packet file name case, via line
- * time stamp change, and s_toss.c table filled in (only for UNIX compiles for
- * now).
- *
- * Also updated squish version number to 1.12 beta.
- *
- * Revision 1.3  2003/06/18 01:58:26  wesgarland
- * Based on changes submitted by Bo Simonsen; modified to have lowercase extensions
- * for the ?ut filenames, where the ? is the mail flavour (FLO)
- *
- */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: s_hole.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #define NOVARS
-#define DEBUG_HOLE
+/*#define DEBUG_HOLE*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -130,9 +97,8 @@ static void near SetHpktName(char *hpname, char *setname)
   strcpy(hpname, from);
 
   /* Convert the filename to uppercase */
-#ifndef UNIX  
+
   upper_fn(hpname);
-#endif
 }
 
 
@@ -346,7 +312,7 @@ void Hole_Read_Netmail_Area(void)
           
           #ifdef DEBUG_HOLE
           (void)printf("Msg #%3ld: %s from %s to ",
-                       (unsigned long) mn, nm->name, Address(&xmsg.orig));
+                       mn, nm->name, Address(&xmsg.orig));
 
           (void)printf("%s\n", Address(&xmsg.dest));
           #endif
@@ -365,12 +331,11 @@ void Hole_Read_Netmail_Area(void)
 
   #ifdef DEBUG_HOLE
   {
-//    struct _hpkt *nm, *end;
-    struct _netinf *nm, *end;
+    struct _hpkt *nm, *end;
 
     (void)printf("To recap:\n\n");
 
-    for (nm=netmsg, end=netmsg+n_netmsg; nm < end; nm++)
+    for (nm=netinf, end=netmsg+n_netmsg; nm < end; nm++)
       (void)printf("%hu:%hu/%hu.%hu, %s\n", nm->to.zone, nm->to.net,
                    nm->to.node, nm->to.point, nm->name);
   }
@@ -695,7 +660,7 @@ void HoleMoveOut(void)
     if (fexist(GetHpktName(hp->name)))
     {
       MakeOutboundName(SblistToNetaddr(&hp->to, &addr), newname);
-      (void)sprintf(newname+strlen(newname), "%cut", tolower(flavour));
+      (void)sprintf(newname+strlen(newname), "%cut", flavour);
 
       if (BusyFileExist(&addr))
       {
@@ -832,7 +797,10 @@ void Hole_Nuke_Bundles(void)
 
       char *strs[]={"mo", "tu", "we", "th", "fr", "sa", "su", NULL};
       char **p;
+
+
       (void)upper_fn(ff->szName);
+
       /* Find the extension of the file */
       
       ext=ff->szName+strlen(ff->szName)-4;

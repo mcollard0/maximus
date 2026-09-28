@@ -1,20 +1,21 @@
+WHICH=telnet
+
 include ../vars.mk
 
-
-#CFLAGS += -DTELNET
-.PHONY: all install install_libs
+ifeq ($(WHICH),telnet)
+libcomm.so: telnetcomm.o
+else
+libcomm.so: ipcomm.o
+endif
+	gcc -shared $^ -o $@
 
 all: libcomm.so
 
-install_libs: libcomm.so
-	@[ -d "$(LIB)" ] || mkdir -p "$(LIB)"
-	cp -f $^ "$(LIB)"
+install_libs install: libcomm.so
+	cp -f $^ $(LIB)
 
-install: install_libs
-
-libcomm.so: ipcomm.o common.o modemcom.o wincomm.o
-	$(CC) $(CFLAGS) -ggdb -shared $^ -lutil $(LDFLAGS) -o $@
-
+telnetcomm.o: ipcomm.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DTELNET -c $^ -o $@
 
 clean:
-	-rm *.o libcomm.so
+	-rm libcomm.so *.o

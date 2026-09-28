@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: s_toss.c,v 1.10 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: s_toss.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -282,20 +284,20 @@ static void near ReportSpeed(time_t secs)
     return;
 
   (void)printf("\nTossed %lu messages in %lu seconds (%lu.%lu msgs/sec).\n",
-               (unsigned long) nmsg_tossed,
-               (unsigned long) secs,
+               nmsg_tossed,
+               secs,
                (unsigned long)nmsg_tossed/secs,
                (unsigned long)(nmsg_tossed*10Lu/secs) % 10Lu);
 
   if (nmsg_skipped)
     (void)printf("** SKIPPED %lu MESSAGES THAT WERE TOO LONG TO TOSS.\n",
-                 (unsigned long) nmsg_skipped);
+                 nmsg_skipped);
 
   if (config.flag & FLAG_ONEPASS)
   {
     (void)printf("Sent %lu messages in %lu seconds (%lu.%lu msgs/sec).\n",
-                 (unsigned long) nmsg_sent,
-                 (unsigned long) secs,
+                 nmsg_sent,
+                 secs,
                  (unsigned long)nmsg_sent/secs,
                  (unsigned long)(nmsg_sent*10Lu/secs) % 10Lu);
 
@@ -668,6 +670,20 @@ static void near Tossing_From(word zone, word net, word node, word point)
   (void)printf("%-22s", temp);
 }
 
+
+
+
+
+
+
+
+
+
+
+#define NUMPROD (sizeof(products)/sizeof(products[0]))
+
+/* Abbreviated product table with many common products */
+
 static char *products[]=
 { 
   "Fido", "ConfMail", "SEAdog", NULL, NULL, "Opus", "Dutchie", NULL,
@@ -691,11 +707,10 @@ static char *products[]=
 
 /* Print out product code for a known product */
 
-#define NUMPROD (sizeof(products)/sizeof(products[0]))
-
 static char * near ProdCode(byte prod)
 {
   static char pnum[3];
+
   if (prod < NUMPROD && products[prod])
     return products[prod];
   else
@@ -730,6 +745,10 @@ static void near WhoFrom(char *name, struct _inmsg *in)
            in->pkt.dest_point,
            (in->pkt.cw & cREV2P) ? "2+" : "StoneAge");
 }
+
+
+
+
 
 /* Returns TRUE if two packet names are equal, not couting the path */
 
@@ -802,6 +821,7 @@ static void near Toss_Pkt(char *pktname, word tflag)
       bad_packet=TRUE;
     }
 
+   
     s=strrchr(in.pktname, PATH_DELIM);
 
     if (s)
@@ -1179,7 +1199,7 @@ static void near DeallocBigBuf(void)
 
 
 
-#if defined(OS_2) || defined(UNIX)
+#ifdef OS_2
 
 /* Handle DLL-specific features when tossing messages */
 
@@ -1374,7 +1394,7 @@ static int near TossOneMsg(struct _inmsg *in, int badmsg, word tflag)
   word dupe, insecure;
 
   int dokill=FALSE;
-#if defined(OS_2) || defined(UNIX)
+#ifdef OS_2
   int noscan=0;
 #endif
 
@@ -1542,7 +1562,7 @@ static int near TossOneMsg(struct _inmsg *in, int badmsg, word tflag)
   }
 
 
-#if defined(OS_2) || defined(UNIX)
+#ifdef OS_2
   InvokeTossFeatures(in, &ar, &dokill, &noscan, txtp);
 #endif
 
@@ -1826,7 +1846,7 @@ static int near TossOneMsg(struct _inmsg *in, int badmsg, word tflag)
 
   if ((config.flag2 & FLAG2_QUIET)==0 &&
       ((ar->flag & AFLAG_PASSTHRU)==0 || (config.flag & FLAG_ONEPASS)==0))
-    (void)printf("\b\b\b\b\b%05lu", (unsigned long) msgn);
+    (void)printf("\b\b\b\b\b%05lu", msgn);
 
   #if defined(__WATCOMC__) && !defined(NT)
   fflush(stdout);
@@ -2278,7 +2298,7 @@ static void near TossBadMsgs(struct _cfgarea *ar)
                          buffer+sizeof(XMSG),
                          MsgGetCtrlLen(hmsg), ctrl) > 0)
           {
-            (void)sprintf(in.pktname, "%s:%lu", ar->name, (unsigned long) mn);
+            (void)sprintf(in.pktname, "%s:%lu", ar->name, mn);
 
             /* If it's in bad_msgs, we have no reliable way to determine    *
              * zone or point information.                                   */

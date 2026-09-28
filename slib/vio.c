@@ -614,14 +614,7 @@ word VidOpen(int has_snow,int desqview,int dec_rows)
       putenv("TERM=vt100");
 
     initscr();             	/* init curses */
-    start_color();
-    printf("\033(U");
-    InitPairs();
-
-/* If enabled wouldn't our keytable work */
-#if 0
     keypad(stdscr, TRUE);	/* enable keyboard mapping */
-#endif    
     cbreak();			/* char-by-char instead of line-mode input */    
     nodelay(stdscr, TRUE);	/* Make getch() non-blocking */
     nonl();			/* No LF->CRLF mapping on output */
@@ -649,7 +642,6 @@ int VidClose(void)
     endwin();            /* destroy curses instance */
 
   stdscr = NULL;
-  printf("\033(B");
   return 0;
 }
 
@@ -710,8 +702,8 @@ int VidWhereY(void)
 
 void VidHideCursor(void)
 {
-/*  if (stdscr)
-    curs_set(0);*/
+  if (stdscr)
+    curs_set(0);
 }
 
 void _fast VidSetAttr(char Attribute)
@@ -721,15 +713,7 @@ void _fast VidSetAttr(char Attribute)
 
 int VidGetch(int Row,int Col)
 {
-   chtype c;
-
-   if(stdscr)
-   {
-	c = mvinch(Col, Row) & A_CHARTEXT;
-	return c;
-   }
-   else
-	return 0;
+  return stdscr ? (mvinch(Col, Row) & A_CHARTEXT) : 0;
 }
 
 void VidPutch(int Row, int Col, char Char, char Attr)
@@ -760,7 +744,7 @@ void pascal _WinBlitz(word start_col,           /* offset from left side of scre
                       sword win_start_col,       /* add to from_ofs     */
                       word this_row)            /* physical screen row.*/
 {
-/*    mvaddstr(this_row, start_col, from_ofs + win_start_col * 2); */
+   /* mvaddstr(this_row, start_col, from_ofs + win_start_col * 2); */
 
   /* We're putting out tonnes of garbage, mostly control-Gs - attr 7? I think
    * this is no ordinary char *buffer, it's a buffer full of 16-bit words, with
@@ -774,7 +758,7 @@ void pascal _WinBlitz(word start_col,           /* offset from left side of scre
 
   chtype        chbuf[num_col];
   int           i;
-  int  		ch, attr, tmpattr;
+  int  		ch, attr;
   unsigned char *start;
 #ifdef MANUAL_SCROLL
   int		newlineCount = 0;
@@ -796,8 +780,7 @@ void pascal _WinBlitz(word start_col,           /* offset from left side of scre
     if (ch == '\n')
       newlineCount++;
 #endif
-    tmpattr = cursesAttribute(attr);
-    chbuf[i] = ch | tmpattr;
+    chbuf[i] = ch | (attr & FOREGROUND_INTENSITY ? A_NORMAL : A_DIM);
   }
 
 #ifdef DEBUG_WINBLITZ
@@ -844,8 +827,6 @@ void pascal _WinBlitz(word start_col,           /* offset from left side of scre
 
 
 #endif
-
-				    
 
 void pascal VidSyncDVWithForce(int fForce)
 {

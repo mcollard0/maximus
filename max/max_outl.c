@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_outl.c,v 1.6 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_outl.c,v 1.2 2003/06/04 23:46:22 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Local output and AVATAR translation routines
 */
@@ -105,7 +103,6 @@ extern char strng[];
 
 void Lputc(int ch)
 {
-
   static char str2[25];
   static char state=-1;
   static char newattr;

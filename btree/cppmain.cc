@@ -17,9 +17,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: cppmain.cc,v 1.2 2004/01/22 09:02:29 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: cppmain.cc,v 1.1.1.1 2002/10/01 17:49:25 sdudley Exp $";
+#pragma on(unreferenced)
 
-extern "C" c_main(int argc, char *argv[]);
+extern "C" int c_main(int argc, char *argv[]);
 
 int main(int argc, char *argv[])
 {

@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: s_misc.c,v 1.6 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: s_misc.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #define NOVARS
 #ifdef SWAP
@@ -996,11 +998,7 @@ static char * near MakeFullPath(char *cmd)
 
   /* Now scan all directories on the path */
 
-#ifndef UNIX
   for (s=strtok(newpath, " ;"); s || last; s=strtok(NULL, " ;"))
-#else
-  for (s=strtok(newpath, ":"); s || last; s=strtok(NULL, ":"))
-#endif
   {
     if (s)
     {
@@ -1372,15 +1370,11 @@ void MashMsgid(char *begin, dword *msgid_hash, dword *msgid_serial)
 
   /* Make sure that the hex ID is read in correctly */
 
-  if (sscanf(end, "%08" UINT32_XFORMAT "x", msgid_serial) != 1)
+  if (sscanf(end, "%08" INT32_FORMAT "x", msgid_serial) != 1)
   {
     *msgid_serial=*msgid_hash=0L;
     return;
   }
-#ifdef DEBUG
-  S_LogMsg("!DEBUG: MSGID Hash: Begin (%s), End (%s) msgid_serial: %0.8x",
-           begin, end, *msgid_serial);
-#endif
 }
 
 

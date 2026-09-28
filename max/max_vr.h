@@ -1,5 +1,5 @@
 /*
- * Maximus Version 3.02
+ * Maximus Version 3.05
  * Copyright 1989, 2002 by Lanius Corporation.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -55,10 +55,10 @@
 
     #define MAX_VER_INT 3
     #define VER_MAJ     "3"
-    #define VER_MIN     "03"
+    #define VER_MIN     "05"
     #define TEAR_TEST   "b"
 
-    #define VER_CHECKSUM (~'3'+~'0'+~'3')
+    #define VER_CHECKSUM (~'3'+~'0'+~'5')
     #define NAME_CHEKSUM (~'M'+~'A'+~'X')
 
     #define VER         VER_MAJ "." VER_MIN

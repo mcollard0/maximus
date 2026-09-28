@@ -1,4 +1,4 @@
-; $Id: english.mad,v 1.5 2004/01/11 23:36:03 wmcbrine Exp $
+; $Id: english.mad,v 1.3 2003/06/11 19:44:12 wesgarland Exp $
 ;
 ; ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
 ; ³                             ENGLISH.MAD                             ³
@@ -1587,16 +1587,16 @@ br_msg_pvt=             RED "-";
 err_toss_qwk=           LRED "Error tossing from %s!\n";
 wait_doing_compr=       YELLOW "Compressing mail.  Please wait...\n";
 qwk_update_lr=          YELLOW "Please wait.  Updating lastread pointers...";
-door_id_name=           "DOOR = %s\r\n";
-door_id_ver=            "VERSION = %s\r\n";
-door_id_sys=            "SYSTEM = %s\r\n";
-door_id_cname=          "CONTROLNAME = %s\r\n";
+door_id_name=           "DOOR = %s\n";
+door_id_ver=            "VERSION = %s\n";
+door_id_sys=            "SYSTEM = %s\n";
+door_id_cname=          "CONTROLNAME = %s\n";
 cprog_name=             "MAXIMUS";
-door_id_ctype_add=      "CONTROLTYPE = ADD\r\n";
-door_id_ctype_drop=     "CONTROLTYPE = DROP\r\n";
-cdat_hello=             "HELLO\r\n";
-cdat_news=              "NEWS\r\n";
-cdat_goodbye=           "GOODBYE\r\n";
+door_id_ctype_add=      "CONTROLTYPE = ADD\n";
+door_id_ctype_drop=     "CONTROLTYPE = DROP\n";
+cdat_hello=             "HELLO\n";
+cdat_news=              "NEWS\n";
+cdat_goodbye=           "GOODBYE\n";
 qwk_too_many=           LRED "\nWarning!  A maximum of %ld messages can be packed during one download.\n\n" WHITE;
 qwk_nuke_tear=          "\r---";
 qwk_replace_tear=       "___";
@@ -1610,7 +1610,7 @@ qwk_busy_msg=           "Error!  QWK packer is currently in use on another node!
 @NT  maxpipe_cmd=       "%s";
 @DOS maxpipe_cmd=       "%s";
 @OS2 maxpipe_cmd=       "maxpipe.exe %%P %s";
-@UNIX maxpipe_cmd=	"%s";
+@UNIX maxpipe_cmd=	"maxpipe %%P %s";
 br_which_areas=         "Search which areas (use \"*\" as wildcard): ";
 @RIP br_which_areas=    RIP RIP_KILL RIP_COL "01" RIP_TEXTXY "1C66Which areas (use "*" as wildcard):\n"
                         RLI RIP_COL "08" RIP_RECT "196LEY6Y" RIP_COL "0F" RIP_RECT "186KEX6X\n"

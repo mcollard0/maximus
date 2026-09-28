@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: maxstart.c,v 1.2 2004/01/22 08:04:27 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: maxstart.c,v 1.1.1.1 2002/10/01 17:53:25 sdudley Exp $";
+#pragma on(unreferenced)
 
 #include <stdlib.h>
 #include <stdarg.h>

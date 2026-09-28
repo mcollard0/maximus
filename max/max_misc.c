@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_misc.c,v 1.11 2004/06/06 21:48:51 paltas Exp $";
+static char rcs_id[]="$Id: max_misc.c,v 1.3 2003/06/05 23:26:49 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Miscellaneous routines
 */
@@ -46,6 +44,7 @@ static char rcs_id[]="$Id: max_misc.c,v 1.11 2004/06/06 21:48:51 paltas Exp $";
 #include <share.h>
 #ifdef UNIX
 # include <errno.h>
+# include <unistd.h>
 #endif
 
 #ifdef OS_2
@@ -267,11 +266,7 @@ void Giveaway_Slice(void)
   if (sleeper)
     (*sleeper)();
 #elif defined(UNIX)
-# ifdef _REENTRANT
-  sched_yield();
-# else
-  sleep(0);
-# endif
+  usleep( 1000 );
 #else
   #error Unknown OS!
 #endif
@@ -1166,6 +1161,7 @@ void Check_Time_Limit(unsigned long *input_timeout, int *timer2)
   }
 
   /* Make sure the user didn't fall asleep... */
+
   if (input_timeout && timeup(*input_timeout) &&
       (!local || (local && (prm.flags2 & FLAG2_ltimeout))) &&
        !(fLoggedOn && acsflag(CFLAGA_NOTIME)))
@@ -1174,7 +1170,7 @@ void Check_Time_Limit(unsigned long *input_timeout, int *timer2)
     {
       logit(inputtimeout);
       Puts("\n\n\n");
-      mdm_dump(DUMP_OUTPUT); 
+      /* mdm_dump(DUMP_OUTPUT); */
       mdm_hangup();
     }
     else
@@ -1185,6 +1181,8 @@ void Check_Time_Limit(unsigned long *input_timeout, int *timer2)
     }
   }
 }
+
+
 
 /* Returns TRUE if the given area is tagged */
 

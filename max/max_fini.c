@@ -17,15 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-#endif
-
-static char __attribute__((unused)) rcs_id[]="$Id: max_fini.c,v 1.6 2004/06/07 15:59:16 paltas Exp $";
-
-#ifndef __GNUC__
+static char rcs_id[]="$Id: max_fini.c,v 1.1.1.1 2002/10/01 17:51:38 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# tname=Termination code
 */
@@ -153,9 +147,7 @@ void FinishUp2(int hangup)
     TagWriteTagFile(&mtm);
   }
 
-#ifdef MAX_TRACKER
   DeinitTracker();
-#endif
 
   usr.time += (int)wasonfor;
   usr.call++;
@@ -193,7 +185,7 @@ void FinishUp2(int hangup)
     ChatCleanUp();
 
 
-  if (rst_offset==-1L && !in_wfc)
+  if (rst_offset==-1L)
   {
     sprintf(temp,activexx_bbs,original_path,task_num);
     unlink(temp);
@@ -579,11 +571,7 @@ void mdm_hangup(void)  /* Do the raise DTR/drop DTR thingy */
 {
   long flush_tout;
 
-  if (!local 
-#if (COMMAPI_VER > 1)
-	&& ComIsAModem(hcModem)
-#endif
-     )
+  if (!local)
   {
     /* Turn off flow control so we don't get stuck with a ^s! */
     Mdm_Flow_Off();
@@ -614,13 +602,6 @@ void mdm_hangup(void)  /* Do the raise DTR/drop DTR thingy */
     }
   }
 
-#if (COMMAPI_VER > 1)
-  if (!local /*&& !ComIsAModem(hcModem)*/)
-  {
-    ComClose(hcModem);
-  }
-#endif
-  
   quit(0);
 }
 

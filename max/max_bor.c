@@ -18,7 +18,7 @@
  */
 
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_bor.c,v 1.3 2004/01/27 21:00:45 paltas Exp $";
+static char rcs_id[]="$Id: max_bor.c,v 1.1.1.1 2002/10/01 17:51:28 sdudley Exp $";
 #pragma on(unreferenced)
 
 /*# name=BORED, the line-oriented editor

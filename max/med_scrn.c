@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: med_scrn.c,v 1.4 2004/01/28 06:38:11 paltas Exp $";
+static char rcs_id[]="$Id: med_scrn.c,v 1.1.1.1 2002/10/01 17:52:21 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=MaxEd editor: Routines for manipulating the screen
 */

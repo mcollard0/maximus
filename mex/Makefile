@@ -1,6 +1,6 @@
 include ../vars.mk
 
-EXTRA_CPPFLAGS += -DHEAP_SIGNATURE
+EXTRA_CPPFLAGS += -DHEAP_SIGNATURE -DDEBUGVM
 
 VMDLL   := libmexvm.so
 
@@ -11,8 +11,8 @@ VMALL_OBJS :=   vm_run.obj      vm_heap.obj     vm_symt.obj             \
 
 VMALL_OBJS := $(VMALL_OBJS:.obj=.o)
 
-LOADLIBES := $(LOADLIBES) -lmsgapi 
-CPPFLAGS += -DWES_HACK
+LOADLIBES := $(LOADLIBES) -lmsgapi
+#CPPFLAGS += -DWES_HACK
 
 .PHONY: all
 

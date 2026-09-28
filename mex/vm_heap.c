@@ -17,14 +17,10 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: vm_heap.c,v 1.6 2005/10/19 10:57:10 paltas Exp $";
+static char rcs_id[]="$Id: vm_heap.c,v 1.2 2003/06/05 01:10:36 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
-#define HEAP_PROBLEMS
-#define HEAP_SIGNATURE
 #define COMPILING_MEX_VM
 
 #include <stdio.h>
@@ -60,7 +56,7 @@ VMADDR hpalloc(word len)
 
   if (hpcheck() != 0)
   {
-    printf("%s bar\n", __FUNCTION__);
+    printf(__FUNCTION__ " bar\n");
   }
 #endif
 
@@ -171,7 +167,7 @@ void hpfree(VMADDR ofs)
 #ifdef HEAP_PROBLEMS
   if (hpcheck() != 0)
   {
-    printf("%s foo\n", __FUNCTION__);
+    printf(__FUNCTION__ " foo\n");
   }
 #endif
 

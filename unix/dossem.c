@@ -25,10 +25,13 @@
  *
  */
 
-#if defined(LINUX) && !defined(PTHREAD_MUTEX_ERRORCHECK)
-/* RedHat 5.2 ships with a not-quite p pthreads interface.. don't know about later versions */
-# define PTHREAD_MUTEX_ERRORCHECK PTHREAD_MUTEX_ERRORCHECK_NP
-# define pthread_mutexattr_settype(attr,type) pthread_mutexattr_setkind_np(attr,type)
+/* Modern glibc has settype; never use obsolete setkind_np (removed from musl/current glibc). */
+#ifndef PTHREAD_MUTEX_ERRORCHECK
+# ifdef PTHREAD_MUTEX_ERRORCHECK_NP
+#  define PTHREAD_MUTEX_ERRORCHECK PTHREAD_MUTEX_ERRORCHECK_NP
+# else
+#  define PTHREAD_MUTEX_ERRORCHECK PTHREAD_MUTEX_DEFAULT
+# endif
 #endif
 
 #define UNIX_SEMDIR "/tmp/.dossem" /* RAM on Solaris */

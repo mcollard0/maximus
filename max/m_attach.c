@@ -19,7 +19,7 @@
 
 
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: m_attach.c,v 1.4 2004/01/27 21:00:30 paltas Exp $";
+static char rcs_id[]="$Id: m_attach.c,v 1.2 2003/06/04 23:25:09 wesgarland Exp $";
 #pragma on(unreferenced)
 
 /*# name=Message Section: File attach related functions

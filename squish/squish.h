@@ -33,8 +33,6 @@
   #define SQNAME    "Squish/386"
 #elif defined(OS_2)
   #define SQNAME    "Squish/2"
-#elif defined(LINUX)
-  #define SQNAME    "Squish/Linux"
 #elif defined(UNIX)
   #define SQNAME    "Squish/UNIX"
 #else
@@ -138,9 +136,6 @@ extern byte *version;
   #include "sqfeat.h"   /* DLL feature library */
 #endif
 
-#ifdef UNIX
-  #include "sqfeat.h"
-#endif
 
 /* If a node is entered in the "personal list", only messages addressed to  *
  * 'name' will be sent to 'node'.                                           */
@@ -323,7 +318,7 @@ struct _config
   struct _groute *zgat;         /* Zonegate nodes                           */
   struct _tosspath *tpath;      /* Paths to toss from                       */
   struct _outb *outb;           /* Where to find outbound directories       */
-#if defined(OS_2) || defined(UNIX)
+#ifdef OS_2
   struct _feature *feat;        /* DLL features                             */
 #endif
 

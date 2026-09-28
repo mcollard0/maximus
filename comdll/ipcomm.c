@@ -17,76 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/** 
- *  @file   	ipcomm.c   TCP/IP communications driver for Maximus, with NVT (-DTELNET) support.
- *  @note		   Eventually, this file will be split into at least four files:
- *			   stub, misc, nvt, raw. Then we should be able to add another .so 
- *                         for another comm type -- e.g. serial. Stub will call either
- *			   the nvt/raw/other_so routine of the right name, if that fails,
- *                         fall through to misc. Maximus will talk to stub.
- *			  
- *  @author 	Wes Garland
- *  @date   	May 24 2003
- *  @version	$Id: ipcomm.c,v 1.18 2004/06/06 21:46:58 paltas Exp $
+/* $Id: ipcomm.c,v 1.4 2003/06/11 17:21:48 wesgarland Exp $
  *
  * $Log: ipcomm.c,v $
- * Revision 1.18  2004/06/06 21:46:58  paltas
- * Fixed "carrier detech" in modemcom, and removed delay in ipcomm.
- *
- * Revision 1.17  2004/04/09 21:55:39  paltas
- * New IPcom.c without iac parsing and things, this is done in maxcomm.c
- *
- * Revision 1.16  2004/01/27 21:05:02  paltas
- * Fixed IAC parsing
- *
- * Revision 1.14  2004/01/19 23:37:03  paltas
- * Added some to get freebsd work, and improved maxcomm a bit..
- *
- * Revision 1.13  2004/01/14 16:09:54  paltas
- * Used a better way to switch between modem and ip..
- *
- * Revision 1.12  2004/01/13 00:47:31  paltas
- * Fixed comm module you can both run modem and telnet.
- *
- * Revision 1.11  2003/12/16 12:31:34  paltas
- * Fixed keys in local mode
- *
- * Revision 1.10  2003/11/23 13:14:45  paltas
- * Forking still doesn't work properly, but ModemIO works, just without filetransfer
- *
- * Revision 1.9  2003/11/15 23:24:57  paltas
- * Changed a bit to gaim comb. with modemio
- *
- * Revision 1.8  2003/11/15 23:20:19  paltas
- * Speed up telnet, and made Zmodem transfer working.. Dunno about X/Y
- * modem..
- *
- * Revision 1.7  2003/11/08 15:19:17  paltas
- * Fixed segfault problem in commdll
- *
- * Revision 1.6  2003/06/29 20:49:00  wesgarland
- * Changes made to allow pluggable communications module. Code in not currently
- * pluggable, but "guts" will be identical to pluggable version of telnet
- * and raw IP plugins.
- *
- * Changed representation of COMMHANDLE (and deprecated OSCOMMHANDLE) in wincomm
- * code (pseudo Win32 communications API), to allow the potential for multiple
- * comm handles, better support UNIX comm plug-ins, etc.
- *
- * Added functions to "Windows" communications API which are normally handled by
- * the assignment operator -- those are possible under Win32 because the
- * underlying representation by which all comm data is accessed (e.g. word
- * length, parity, buffer sizes) is an integer (not unlike a UNIX file
- * descriptor), but under UNIX a COMMHANDLE is an incomplete struct pointer.
- * Using these routines instead of "inside" knowledge should allow new code
- * written for UNIX to be backported to Windows (and maybe other OSes) easily.
- *
- * This check-in is "barely tested" and expected to have bugs.
- *
- * Revision 1.5  2003/06/13 04:24:43  wesgarland
- * Corrected tv_usec delay in bound socket select to valid value (0.5s); now accepts 
- * calls under Solaris
- *
  * Revision 1.4  2003/06/11 17:21:48  wesgarland
  * Andrew Clarke: Minor changes for building under FreeBSD + general touchup
  *
@@ -100,13 +33,28 @@
  *
  */
 
+/** 
+ *  @file   ipcomm.c       TCP/IP communications driver for Maximus, with NVT (-DTELNET) support
+ *  @note		   Eventually, this file will be split into at least four files:
+ *			   stub, misc, nvt, raw. Then we should be able to add another .so 
+ *                         for another comm type -- e.g. serial. Stub will call either
+ *			   the nvt/raw/other_so routine of the right name, if that fails,
+ *                         fall through to misc. Maximus will talk to stub.
+ *			  
+ *  @author Wes Garland
+ *  @date   May 24 2003
+ */
+
 #ifndef UNIX
 # error UNIX only!
 #endif
 
-#ifndef __GNUC__
-static char rcs_id[]="$Id: ipcomm.c,v 1.18 2004/06/06 21:46:58 paltas Exp $";
-#endif
+#define WATCHDOG				/**< use alarm() to make sure max doesn't die */
+#undef WATCHDOG
+#define WATCHDOG_LISTEN_TIMEOUT		0	/**< how long to wait between listen->accept */
+#define WATCHDOG_ACTIVITY_TIMEOUT	300	/**< how long to wait between ComRead activity */
+
+static char rcs_id[]="$Id: ipcomm.c,v 1.4 2003/06/11 17:21:48 wesgarland Exp $";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,7 +64,6 @@ static char rcs_id[]="$Id: ipcomm.c,v 1.18 2004/06/06 21:46:58 paltas Exp $";
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
@@ -124,45 +71,70 @@ static char rcs_id[]="$Id: ipcomm.c,v 1.18 2004/06/06 21:46:58 paltas Exp $";
 #include "prog.h"
 #include "ntcomm.h"
 
-#include "comprots.h"
-#include "comstruct.h"
+#ifdef TELNET
+# include "telnet.h"
+#endif
 
-/** Syntactic sugar for UNIX only */
-#define unixfd(hc)	FileHandle_fromCommHandle(ComGetHandle(hc))
+typedef void * commHandle_t;		/**< Eventually, probably will be a dlopen() handle */
 
 /** Communications handle. Completes foward declaration in ntcomm.h.
  *  Fields below handleType are private to the module. Fields above
  *  (and including) handleType are "public" to the com module stub.
  */
-#if 0
 struct _hcomm
 {
-  /****** Public members available to *any* COMMAPI driver */
-  COMMHANDLE		h;              	/**< "Windows" COMMHANDLE -- contains UNIX fd */
-  BOOL			burstMode;		/**< FALSE = Nagle algorithm enabled (TCP_NODELAY) */
-  const char		*device;		/**< Name of tcp service or port number (ASCIZ) */
-  BOOL			fDCD;           	/**< Current status of DCD */
-  commHandle_t		handleType;		/**< Type of handle / dl_open stub */
-  COMMTIMEOUTS 		ct;          		/**< Timeout values */
+  int 			h;              /**< File Descriptor. For the listening socket (no carrier) or connected socket. */
+  BOOL			burstMode;	/**< 0 = Nagle algorithm enabled (TCP_NODELAY) */
+  const char		*device;	/**< Name of tcp service or port number (ASCIZ) */
+  BOOL			fDCD;           /**< Current status of DCD */
+  COMMTIMEOUTS		ct;		/**< Timeouts */
+  commHandle_t		handleType;	/**< Description of handleType. Stub in case we ever get multiple drivers going. */
 
-  /****** Private members for this file below */
-  struct sockaddr_un 	*saddr_p;  		/**< Address we're bound to and listening on or NULL */
-  int			listenfd;		/**< File descriptor for saddr_p or -1 */
-  signed int		peekHack;		/**< Character we've ComPeek()ed but not ComRead(); or -1 */
-  BOOL			burstModePending; 	/**< Next write's burst mode */
-  size_t		txBufSize;		/**< Size of the transmit buffer */
+  /* Private members for this file below */
+  struct sockaddr_in 	*saddr_p;  	/**< Address we're bound to and listening on. NULL after carrier. */
+  size_t		txBufSize;	/**< Current value for SO_SNDBUF */
+  size_t		rxBufSize;	/**< Current value for SO_RCVBUF */
+  signed int		peekHack;	/**< Character we've ComPeek()ed but not ComRead(); -1 for none */
+  BOOL			burstModePending; /**< Next write's burst mode */
+  telnet_moption_t	telnetPendingOptions; /**< Unprocessed option requests from remote */
+  telnet_moption_t	telnetOptions; /**< Current telnet options (bitmask) */
+  /* Coalesce single-byte ComPutc traffic into large TCP writes (RIP/ANSI). */
+  unsigned char		*txCoalesce;
+  size_t		txCoalesceLen;
+  size_t		txCoalesceCap;
 } _hcomm;
 
+#ifndef TX_COALESCE_DEFAULT
+/* Large enough to absorb many RIP lines before a TCP write (~45 MTUs). */
+#define TX_COALESCE_DEFAULT  (64u * 1024u)
 #endif
 
 void logit(char *format,...);
+static BOOL _ComWriteRaw(HCOMM hc, PVOID pvBuf, DWORD dwCount);
+static BOOL ComTxFlush(HCOMM hc);
 
-/** Set up communications timeouts. Values directly from sjd. Note that
+#ifdef WATCHDOG
+/** Signal handler */
+static HCOMM WD_hc = NULL;
+void WD_dropCarrier(int dummy)
+{
+  if (!WD_hc)
+    return;
+
+  shutdown(WD_hc->h, 2);
+  close(WD_hc->h);      
+  WD_hc->fDCD = 0;
+
+  logit("!" __FILE__ ": WATCHDOG Dropping Carrier..");
+}
+#endif
+
+/** Setup communications timeouts. Values directly from sjd. Note tha
  *  there are 16 timeout ticks per ms in some of these fields.
  *
- *  @param hc Maximus Communications Handle.
+ *  @param hc Communications Handle.
  */
-void _SetTimeoutBlock(HCOMM hc)
+static void _SetTimeoutBlock(HCOMM hc)
 {
   DCB dcb;                        /* Device Control Block info for com port */
 
@@ -173,7 +145,7 @@ void _SetTimeoutBlock(HCOMM hc)
 
   hc->ct.ReadIntervalTimeout=16;      /* Wait up to 1 msec between chars */
 
-  GetCommState(ComGetHandle(hc), &dcb);
+  GetCommState(hc->h, &dcb);
 
   if (dcb.BaudRate > 2400)
     hc->ct.ReadTotalTimeoutConstant=125; /* Wait a max of 150 msec for a char */
@@ -186,13 +158,10 @@ void _SetTimeoutBlock(HCOMM hc)
 
   hc->ct.WriteTotalTimeoutConstant=250; /*SJD Thu  04-22-1993  18:47:04 */
 
-  SetCommTimeouts(ComGetHandle(hc), &hc->ct);
+  SetCommTimeouts(hc->h, &hc->ct);
 }
 
-/** Misc. port initialization. 
- *  @param	hc	Maximus communications handle for opened port we're initializing.
- */
-void _InitPort(HCOMM hc)
+static void _InitPort(HCOMM hc)
 {
   DCB dcb;
 
@@ -205,7 +174,7 @@ void _InitPort(HCOMM hc)
 
   /* Get device control block for comm port */
 
-  GetCommState(ComGetHandle(hc), &dcb);
+  GetCommState(hc->h, &dcb);
 
   /* Set the event character to ^C.  If we receive a ^C, an event will      *
    * be generated and handled by our event thread.                          */
@@ -218,11 +187,11 @@ void _InitPort(HCOMM hc)
   dcb.EvtChar=0;
 /*  dcb.EvtChar=0x03;*/
 
-  SetCommState(ComGetHandle(hc), &dcb);
+  SetCommState(hc->h, &dcb);
 
   /* Now enable communications events for this port - errors, DCD, and ^C */
 
-  SetCommMask(ComGetHandle(hc), DEFAULT_COMM_MASK);
+  SetCommMask(hc->h, DEFAULT_COMM_MASK);
 }
 
 /** Open the named device as a communications port.
@@ -232,13 +201,13 @@ void _InitPort(HCOMM hc)
  *  port number, but winds up being a file
  *  descriptor in the UNIX model.
  *
- *  @param hfComm    UNIX: ??????. NT: Com Port number
+ *  @param hfComm    UNIX: File Descriptor. NT: Com Port number
  *  @param phc       [out] Handle we're populating
  *  @param dwTxBuf   Transmit buffer size (deprecated)
  *  @param dwRxBuf   Receive buffer size (deprecated)
  *  @returns         TRUE on success
  */
-BOOL COMMAPI ComOpenHandle(COMMHANDLE hfComm, HCOMM *phc, DWORD dwRxBuf, DWORD dwTxBuf)
+BOOL COMMAPI ComOpenHandle(int hfComm, HCOMM *phc, DWORD dwRxBuf, DWORD dwTxBuf)
 {
   HCOMM hc;
 
@@ -247,18 +216,22 @@ BOOL COMMAPI ComOpenHandle(COMMHANDLE hfComm, HCOMM *phc, DWORD dwRxBuf, DWORD d
     return FALSE;
 
   /* Allocate memory for the handle structure */
-  hc = calloc(sizeof(*hc), 1);
-  if (hc == NULL)
+  if ((hc=calloc(sizeof(*hc), 1))==NULL)
     return FALSE;
 
-  hc->h = CommHandle_fromFileHandle(NULL, -1);
-  SetupComm(hc->h, dwRxBuf, dwTxBuf);
-  hc->txBufSize = dwTxBuf;
-
-  /* Store the passed handle (may contain file descriptor)*/
-  hc->h = hfComm;
-
   _InitPort(hc);
+
+  /* Store the passed handle (file descriptor)*/
+  hc->h=hfComm;
+  hc->peekHack = -1;
+  hc->txCoalesceCap = TX_COALESCE_DEFAULT;
+  hc->txCoalesceLen = 0;
+  hc->txCoalesce = malloc(hc->txCoalesceCap);
+  if (!hc->txCoalesce)
+  {
+    free(hc);
+    return FALSE;
+  }
 
   /* Store the comm handle in the caller's variable */
   *phc=hc;
@@ -284,19 +257,13 @@ BOOL COMMAPI ComOpenHandle(COMMHANDLE hfComm, HCOMM *phc, DWORD dwRxBuf, DWORD d
  *  @param	dwRxBuf		Receive buffer size
  *  @returns			TRUE on success
  */ 
- 
-#define SOCKPATH "maxipc" 
-static char sockpath[PATH_MAX];
-static char lockpath[PATH_MAX];
-
-BOOL COMMAPI IpComOpen(LPTSTR pszDevice, HCOMM *phc, DWORD dwRxBuf, DWORD dwTxBuf)
+BOOL COMMAPI ComOpen(LPTSTR pszDevice, HCOMM *phc, DWORD dwRxBuf, DWORD dwTxBuf)
 {
-  int			fd = -1; 	/**< file descriptor */
-  struct sockaddr_un 	serv_addr;
+  int			h = -1; 	/**< file descriptor */
+  struct sockaddr_in 	serv_addr;
+  struct servent 	*se;  
   short			portnum = 0;
-  COMMHANDLE		h = NULL;
-  char			tmpPath[PATH_MAX];
-  h = CommHandle_fromFileHandle(h, -1);
+  int			junk;
 
   if (strncasecmp(pszDevice, "Com", 3) == 0)
     pszDevice += 3;
@@ -304,51 +271,65 @@ BOOL COMMAPI IpComOpen(LPTSTR pszDevice, HCOMM *phc, DWORD dwRxBuf, DWORD dwTxBu
   if (pszDevice[0] == ':')
     pszDevice++;
 
-  portnum=atoi(pszDevice);
+  if ((portnum = (short)atoi(pszDevice)) == 0)
+  {
+    se = getservbyname(pszDevice, "tcp");
+    if (se)
+      portnum = se->s_port;
+  }
+      
+  if (!portnum)
+    portnum = 2001;
 
-  sprintf(sockpath, "%s/%s%d", getcwd(tmpPath, PATH_MAX), SOCKPATH, portnum);
-  sprintf(lockpath, "%s/%s%d.lck", getcwd(tmpPath, PATH_MAX), SOCKPATH, portnum);
-
-  if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+  if ((h = socket(AF_INET, SOCK_STREAM, 0)) < 0)
   {
     logit("!Unable to create AF_INET socket! (%s)", strerror(errno));
     return FALSE;
   }
 
-  serv_addr.sun_family = AF_UNIX;
-  strcpy(serv_addr.sun_path, sockpath);
-  unlink(serv_addr.sun_path);
-  unlink(lockpath);
+  serv_addr.sin_family=AF_INET;
+  serv_addr.sin_addr.s_addr = INADDR_ANY;
+  serv_addr.sin_port=htons(portnum);
 
-  if (bind(fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)))
+  junk = AF_INET;
+  setsockopt(h, SOL_SOCKET, SO_REUSEADDR, (char *)&junk, sizeof(junk));
+
+  if (bind(h, (struct sockaddr *) &serv_addr, sizeof(serv_addr)))
   {
     logit("!Unable to bind to port %i! (%s)", (int)portnum, strerror(errno));
-    close(fd);
+    close(h);
     return FALSE;
   }
 
   /* No listen backlog. See ComIsOnline() */
-  if (listen(fd, 1))
+  if (listen(h, 1))
   {
     logit("!Unable to listen on port %i! (%s)", (int)portnum, strerror(errno));
-    close(fd);
+    close(h);
     return FALSE;
   }
 
-  /* Now attempt to initialize this handle */
+  /* Now attempt to register this handle to get our threads going */
   if (!ComOpenHandle(h, phc, dwRxBuf, dwTxBuf))
   {
-    close(fd);
+    close(h);
     return FALSE;
   }
 
-  (*phc)->listenfd	= fd;
+  (*phc)->txBufSize	= dwTxBuf;
+  (*phc)->rxBufSize	= dwRxBuf;
   (*phc)->device 	= strdup(pszDevice);
   (*phc)->saddr_p 	= malloc(sizeof(serv_addr));
   if ((!(*phc)->saddr_p) || (!(*phc)->device))
     NoMem();
   *((*phc)->saddr_p) = serv_addr;
 
+#if defined(WATCHDOG)
+  WD_hc = *phc;
+  signal(SIGALRM, WD_dropCarrier);
+  alarm(WATCHDOG_LISTEN_TIMEOUT);
+#endif
+  
   return TRUE;
 }
 
@@ -358,45 +339,84 @@ BOOL COMMAPI IpComOpen(LPTSTR pszDevice, HCOMM *phc, DWORD dwRxBuf, DWORD dwTxBu
  *  @param	hc	The handle to close
  *  @returns		TRUE on success
  */
-BOOL COMMAPI IpComClose(HCOMM hc)
+BOOL COMMAPI ComClose(HCOMM hc)
 {
   if (!hc)
     return FALSE;
 
+  ComTxFlush(hc);
+
   if (hc->saddr_p)
-  {
-    if (hc->listenfd == -1)
-    {
-      shutdown(unixfd(hc), 2);
-      close(unixfd(hc));
-    }
-    else
-      close(hc->listenfd);
-  }
+    shutdown(hc->h, 2);
 
-  hc->fDCD = FALSE;		/* TCP/IP shutdown: remove "carrier" signal */
+  hc->fDCD = 0;			/* TCP/IP shutdown: remove "carrier" signal */
 
-  if(hc->device)
-     free((char *)hc->device);
-  if(hc)
-     free(hc);
-
-  unlink(sockpath);
-  unlink(lockpath);
+  close(hc->h);
+  free((char *)hc->device);
+  free(hc->txCoalesce);
+  free(hc);
 
   return TRUE;
 }
 
+#ifdef TELNET
+ssize_t telnet_write(HCOMM hc, const unsigned char *buf, size_t count)
+{
+  unsigned char	*iac;
+  int		fd = hc->h;
+
+  if (!hc)
+    return -1;
+
+  if (hc->telnetOptions & mopt_TRANSMIT_BINARY)
+    return write(fd, buf, count);
+
+  iac = memchr(buf, cmd_IAC, count);
+  if (!iac)
+    return write(fd, buf, count);
+  else
+  {
+    ssize_t		bytesWritten;
+
+    /* Write up to the IAC */
+    bytesWritten = write(fd, buf, (iac - buf) + 1);
+    if (bytesWritten != ((iac - buf) + 1))
+      return bytesWritten;
+
+    /* Write an extra IAC, and hope to hell it goes */
+    if (write(fd, iac, 1) != 1)
+    {
+      sleep(1);
+      write(fd, iac, 1);
+    }
+
+    /* Report that we weren't "able" to write the whole buffer */
+    return bytesWritten;
+  }
+}
+#else
+# define telnet_write(a, b, c) write(a->h,b,c)
+#endif
+
+#ifdef TELNET
+/** Read, blocking for a specified timeout. Used to support telnet_read().
+ *  @param	fd	file descriptor to read from
+ *  @param	buf	buffer to populate
+ *  @param	count	size of buffer
+ *  @param	timeout	Number of seconds to wait for data.
+ *
+ *  @returns		Number of bytes read, or -1 on error.
+ */
 ssize_t timeout_read(int fd, unsigned char *buf, size_t count, time_t timeout)
 {
   /* for used by telnet_read to read more buffer w/o blocking */
- 
+  
   struct timeval	tv;
   int			i;
   fd_set		rfds;
 
   tv.tv_sec = timeout;
-  tv.tv_usec = 5;
+  tv.tv_usec = 500;
 
   FD_ZERO(&rfds);
   FD_SET(fd, &rfds);
@@ -404,7 +424,7 @@ ssize_t timeout_read(int fd, unsigned char *buf, size_t count, time_t timeout)
   do
   {
     /* Note: on some unices, tv will be decremented to report the
-     * amount slept; on others it will not. That means that some
+     * amount read; on others it will not. That means that some
      * unices will wait longer than others in the case that a
      * signal has been received.
      */
@@ -420,6 +440,331 @@ ssize_t timeout_read(int fd, unsigned char *buf, size_t count, time_t timeout)
   return -1;
 }
 
+telnet_moption_t telnetOptionBit(telnet_option_t option)
+{
+  size_t i;
+
+  for (i=0; (i < sizeof(telnet_OptionList) / sizeof(telnet_OptionList[0])); i++)
+  {
+    if (telnet_OptionList[i].optEnum == option)
+      return telnet_OptionList[i].optBit;
+  }
+
+  return 0;
+}
+
+void setTelnetOption(HCOMM hc, telnet_command_t command, telnet_option_t option)
+{
+  BOOL			enable;
+  telnet_moption_t	*optionMask;
+
+  switch(command)
+  {
+    case cmd_WILL:
+      enable = TRUE;
+      optionMask = &(hc->telnetOptions);
+      break;
+    case cmd_WONT:
+      enable = FALSE;
+      optionMask = &(hc->telnetOptions);
+      break;
+    case cmd_DO:
+      enable = TRUE;
+      optionMask = &(hc->telnetPendingOptions);
+      break;
+    case cmd_DONT:
+      enable = FALSE;
+      optionMask = &(hc->telnetPendingOptions);
+      break;
+    default:
+      logit("!Unregonized telnet option IAC %i %i", command, option);
+      return;
+  }
+
+  switch(enable)
+  {
+    case TRUE:
+      *optionMask |= telnetOptionBit(option);
+      break;
+    case FALSE:
+      *optionMask &= telnetOptionBit(option);
+  }
+
+  return;
+}
+
+/** Read, consuming NVT control codes in as transparent a manner as possible.
+ *  Processes IAC DO/DONT/WONT codes and adjusts hc as needed. Control codes
+ *  are not passed to the caller.
+ *
+ *  @param	fd	file descriptor to read from
+ *  @param	buf	buffer to populate
+ *  @param	count	size of buffer
+ *  @param	timeout	Number of seconds to wait for data.
+ *
+ *  @returns		Number of bytes read, or -1 on error.
+ */
+static inline ssize_t telnet_read(HCOMM hc, unsigned char *buf, size_t count)
+{
+  unsigned char	*iac, *ch, arg, arg2;
+  int		fd = hc->h;
+  ssize_t	bytesRead = read(fd, buf, count);	/* Select()ed for read already */
+
+  if (!hc)
+    return -1;
+
+  if (hc->telnetOptions & mopt_TRANSMIT_BINARY)
+    return bytesRead;
+
+  telnet_read_reread:
+  if (bytesRead <= 0)
+    return bytesRead;
+
+  if (count == 1) 
+  {
+    /* Asked for a single byte. Make sure the returned byte
+     * was nothing special. 
+     *
+     * Note: According to my docs, NULs are to be ignored
+     *       during telnet. So how the heck do we do ZMODEM? 
+     *	     Probably with IAC WILL TRANSMIT-BINARY.
+     */
+
+    switch(buf[0])
+    {
+      case '\0':
+	count = timeout_read(fd, buf, 1, 0);
+	goto telnet_read_reread;
+      case cmd_IAC:
+	break;				/* Fall through to IAC processing below */
+      case '\r':
+	hc->peekHack = -1;
+	timeout_read(hc->h, (char *)&(hc->peekHack), 1, 1);
+	switch(hc->peekHack)
+	{
+	  case '\n':			/* Telnet end-of-line, give max \r\n */
+	    hc->peekHack = -1;
+	    return bytesRead;
+	    break;
+	  case '\0':			/* Telnet carriage return, give max \r (consume \0) */
+	    hc->peekHack = -1;
+	    break;
+	}
+	break;
+      default:
+	return bytesRead;
+    }
+  }
+  else
+  {
+    /* Modify in-buffer eol, or cr sequences to look right */
+
+    for (ch = memchr(buf, '\r', bytesRead);
+	 ch && bytesRead;
+	 ch = memchr(ch, '\r', bytesRead - (ch - buf)))
+    {
+      switch(ch[1])
+      {
+	case '\n':			/* Telnet end-of-line, give max \r\n */ 
+	  ch++; 
+	  break;
+	case '\0':			/* Telnet carriage return, give max \r (consume \0) */
+	  memmove(ch, ch + 1, --bytesRead);
+	  break;
+      }
+    }
+
+    /* Pull \0 out of the buffer */
+    for (ch = memchr(buf, '\0', bytesRead);
+	 ch && bytesRead;
+	 ch = memchr(ch + 1, '\0', bytesRead - (ch - buf)))
+    {
+      memmove(ch, ch + 1, --bytesRead);
+    }
+
+    /* All characters consumed?? Try again */ 
+    if (bytesRead == 0)
+    {
+      bytesRead = timeout_read(fd, buf, count, 0);
+      if (bytesRead > 0)
+	goto telnet_read_reread;
+      return bytesRead;
+    }
+  }
+
+  /* Code below here assumes bytesRead, count >= 1 */
+  for (iac = memchr(buf, cmd_IAC, bytesRead);
+       bytesRead > 0 && iac && (iac < (buf + bytesRead));
+       iac = memchr(iac + 1, cmd_IAC, bytesRead))
+  {
+    /* There was an embedded IAC. This means we need 
+     * to locate the telnet data and "consume" it.
+     */
+
+    if (iac == (buf + bytesRead - 1))		/* IAC last char in buf? */
+    {
+      if (timeout_read(fd, &arg, 1, 5) != 1)
+      {
+	sleep(1);
+	if (timeout_read(fd, &arg, 1, 5) != 1)
+	  return bytesRead - 1;			/* Can't find the argument.. drop the IAC */
+      }
+
+      if (arg == cmd_IAC)			/* Escaped (real) IAC (0xff) @ end of buf */
+	return bytesRead;
+
+      bytesRead -= 1;
+    }
+    else
+    {
+      arg = iac[1];
+      if (arg == cmd_IAC || (arg == cmd_EC))	/* Escaped (real) IAC (0xff), or erase char command */
+      {
+	bytesRead -= 1;
+	memmove(iac, iac + 1, bytesRead - (iac - buf));
+	if (arg == cmd_EC)
+	  *iac = 0x08; 				/* erase char command: shove a backspace in the stream */
+	continue;
+      }
+      else
+      {
+	bytesRead -= 2;
+	memmove(iac, iac + 2, bytesRead - (iac - buf));
+      }
+    }
+
+    /* Now the IAC and a single argument have been consumed. iac
+     * is now a pointer to arbitrary telnet data 
+     */
+
+    switch(arg)
+    {
+      case cmd_WILL:				/* These each have one additional argument. */
+      case cmd_WONT: 
+      case cmd_DO:
+      case cmd_DONT:
+	if (iac == (buf + bytesRead))		/* Extra argument not in buffer */
+	{
+	  if (timeout_read(fd, &arg2, 1, 2) != 1)
+	    return bytesRead;			/* Can't find the last argument.. drat. */
+	}
+	else
+	{
+	  arg2 = *iac;
+	  bytesRead -= 1;
+	  memmove(iac, iac + 1, bytesRead - (iac - buf));
+	}
+	setTelnetOption(hc, arg, arg2);
+	break; /* continue loop */
+
+      case cmd_SE:				/* These commands have no arguments */
+      case cmd_NOP:
+      case cmd_DM:
+      case cmd_BRK:
+      case cmd_IP:
+      case cmd_AO:
+      case cmd_AYT:
+      case cmd_GA:
+	break; /* continue loop */
+	
+      case cmd_SB:				/* Telnet subneg'n data coming; ignore all data 'till IAC/SE */
+      {
+	unsigned char 	*niac; /* next IAC */
+	int		found = 0;
+
+	for (niac = memchr(iac, cmd_IAC, bytesRead - (iac - buf));
+	     niac && (niac < (buf + bytesRead));
+	     niac = memchr(niac + 1, cmd_IAC, bytesRead - (niac -buf)))
+	{
+	  if (niac[1] == cmd_SE)
+	  {
+	    found = 1;
+	    break;
+	  }
+	}
+	
+	if (found)				/* IAC/SE sequence was in buffer. Consume it */
+	{
+	  bytesRead -= ((niac + 1) - iac);
+	  memmove(iac, niac + 1, bytesRead - ((niac + 1) - buf));
+	}
+	else					/* IAC/SE seq not in current buffer. Read 'till we find it */
+	{
+	  unsigned char	c, lastC;
+	  ssize_t	i;
+
+	  c = buf[bytesRead - 1];		/* Prime the loop with the last char read */
+	  bytesRead = iac - buf;		/* Report back we only read up to the IAC */
+
+	  do
+	  {
+	    lastC = c;
+	    i = timeout_read(fd, &c, 1, 20);
+	  } while ((i = 1) && !(c == cmd_SE && lastC == cmd_IAC));
+	}
+	break; /* continue loop */
+      }
+      default:
+	logit("!Found unknown IAC argument %c", arg);
+	break; /* continue loop */
+    } /* esac */
+  } /* end for */
+
+  return bytesRead;
+}
+#else
+# define telnet_read(a, b, c) read(a->h,b,c)
+#endif
+
+#ifdef TELNET
+/** This simple driver doesn't negotiate, it makes demands!
+ *  We write with write() to enable us to send telnet data
+ *  unmolested. We receive with read() because it will
+ *  consume telnet data, and change the comm parameters
+ *  as (not) needed.
+ *
+ *  @param	hc	Communications handle
+ */
+void negotiateTelnetOptions(HCOMM hc)
+{
+  unsigned char command[3];
+  int 		ch;
+
+  ch = ComPeek(hc);	/* Get the ball rolling -- ComPeek() will process/consume remote telnet commands */
+
+  sprintf(command, "%c%c%c", cmd_IAC, cmd_DONT, opt_ENVIRON);
+  write(hc->h, command, 3);
+  if (ch == -1)
+    ch = ComPeek(hc);
+
+  sprintf(command, "%c%c%c", cmd_IAC, cmd_DO, opt_SGA);
+  write(hc->h, command, 3);
+  if (ch == -1)
+    ch = ComPeek(hc);
+
+  sprintf(command, "%c%c%c", cmd_IAC, cmd_WILL, opt_ECHO);
+  write(hc->h, command, 3);
+  if (ch == -1)
+    ch = ComPeek(hc);
+
+  sprintf(command, "%c%c%c", cmd_IAC, cmd_WILL, opt_SGA);
+  write(hc->h, command, 3);
+  if (ch == -1)
+    ch = ComPeek(hc);
+
+  sprintf(command, "%c%c%c", cmd_IAC, cmd_DONT, opt_NAWS);
+  write(hc->h, command, 3);
+  if (ch == -1)
+    ch = ComPeek(hc);
+
+  sprintf(command, "%c%c%c", cmd_IAC, cmd_DO, opt_TRANSMIT_BINARY);
+  write(hc->h, command, 3);
+  if (ch == -1)
+    ch = ComPeek(hc);
+
+  return;
+}
+#endif
 
 /** Return the current status of DCD on this line
  *  TCP/IP Interpretation: If carrier has not been set true yet,
@@ -427,15 +772,16 @@ ssize_t timeout_read(int fd, unsigned char *buf, size_t count, time_t timeout)
  *  analogous to a modem auto-answering and raising the DCD
  *  signal on the serial port.
  *
- *  @note	This routine gets polled while Maximus is idle.
- *		This is how we recognize that a caller is online.
+ *  @note	I'm betting that this routine gets polled while
+ *		Maximus is idle. This is how we'll recognize that
+ *		a caller is online.
  *
  *  @warning	We pull a super-sneaky trick here to avoid the
  *		(normal) requirement of a listen->accept->fork
- *		daemon. We assume that max -w is being run in
- *		respawn mode (e.g. from inittab). When a call 
- *		comes in we fork and exit the parent, letting the
- *		child continue along its merry way. Respawing
+ *		daemon. We assume that max -wfc is being run
+ *		in respawn mode from inittab. When a call comes
+ *		in we fork and exit the parent, letting the
+ *		child continue along its merry way. init then
  *		kicks up a new parent, and by then this process
  *		isn't listening for inbound connections anymore.
  *		This also makes it necessary for us to be running
@@ -445,7 +791,7 @@ ssize_t timeout_read(int fd, unsigned char *buf, size_t count, time_t timeout)
  *  @param	hc 	Communications handle
  *  @returns		0 when we're offline
  */
-USHORT COMMAPI IpComIsOnline(HCOMM hc)
+USHORT COMMAPI ComIsOnline(HCOMM hc)
 {
   fd_set 		rfds, wfds;
   struct timeval 	tv;
@@ -466,18 +812,17 @@ USHORT COMMAPI IpComIsOnline(HCOMM hc)
     /* "Carrier"? Let's make sure the socket is okay. */
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
-    FD_SET(unixfd(hc), &rfds);
-    FD_SET(unixfd(hc), &wfds);
+    FD_SET(hc->h, &rfds);
+    FD_SET(hc->h, &wfds);
 
     tv.tv_sec = 0;
-    tv.tv_usec = 0;
+    tv.tv_usec = 1;
 
-    if (((rready = select(unixfd(hc) + 1, &rfds, NULL, NULL, &tv)) < 0) || (select(unixfd(hc) + 1, NULL, &wfds, NULL, &tv) < 0))
+    if (((rready = select(hc->h + 1, &rfds, NULL, NULL, &tv)) < 0) || (select(hc->h + 1, NULL, &wfds, NULL, &tv) < 0))
     {
-      hc->fDCD = FALSE;
-      shutdown(unixfd(hc), 2);
-      close(unixfd(hc));      
-      unlink(lockpath);
+      hc->fDCD = 0;
+      shutdown(hc->h, 2);
+      close(hc->h);      
     }
 
     if ((rready == 1) && hc->fDCD && (hc->peekHack == -1))
@@ -485,98 +830,122 @@ USHORT COMMAPI IpComIsOnline(HCOMM hc)
       unsigned char 	buf[1];
       ssize_t		i;
 
-      i = read(unixfd(hc), &buf, 1);
+      i = read(hc->h, &buf, 1);
       switch(i)
       {
 	case 0:
 	case -1:
-	  hc->fDCD = FALSE;
-	  shutdown(unixfd(hc), 20);
-	  close(unixfd(hc));
+	  hc->fDCD = 0;
+	  shutdown(hc->h, 20);
+	  close(hc->h);
 	  break;
 	case 1:
 	  hc->peekHack = buf[0];
 	  break;
       }
 
-      if (hc->fDCD == FALSE)
-      {
+      if (hc->fDCD == 0)
 	logit("!Caller closed TCP/IP connection (Dropped Carrier)");
-      }	
     }
 
     skipCheck:
-    return hc->fDCD ? 1 : 0;
-  }
+#ifdef WATCHDOG
+    alarm(0);
+#endif
 
-  if(hc->listenfd == -1)
-    return 0;
+    return hc->fDCD;
+  }
 
   /* No "Carrier"? See if we can accept a connection */
   FD_ZERO(&rfds);
-  FD_SET(hc->listenfd, &rfds);
+  FD_SET(hc->h, &rfds);
 
   /* Will longish delay cause problems with console? */
   tv.tv_sec = 0;
-  tv.tv_usec = 500000;
+  tv.tv_usec = 5000000;
 
-  if (select(hc->listenfd + 1, &rfds, NULL, NULL, &tv) > 0)
+  if (select(hc->h + 1, &rfds, NULL, NULL, &tv) > 0)
   {
     int addrSize = sizeof(*hc->saddr_p);
-    int fd = -1;
+    int fd;
 
-    fd = accept(hc->listenfd, (struct sockaddr *)&hc->saddr_p, &addrSize);
+    fd = accept(hc->h, (struct sockaddr *)&hc->saddr_p, &addrSize);
     if (fd >= 0)
     {	
-      FILE* 	f = NULL;
+      int optval;
+      int	optlen = sizeof(optval);
+      pid_t	parentPID = getpid();
+
+#if defined(WATCHDOG)
+      alarm(0);
+      WD_hc = hc;
+      signal(SIGALRM, WD_dropCarrier);
+#endif
 
       /* Have accepted a socket. Close the bound socket and dump
        * the parent, so that we init can swing open a new task.
        * This technique probably won't cause us much grief, except
        * maybe on a very busy system.
        */
-      /* Set accepted descriptor and other misc com parameters */
-      
-      f = fopen(lockpath, "w");
-      fclose(f);
-      
-      CommHandle_setFileHandle(hc->h, fd);
-      hc->fDCD = TRUE;
-      hc->listenfd = -1;
+
+      close(hc->h);
+      if (fork())
+	_exit(0);	/* _exit -> no atexit cleanups! */ /* This should NOT be changed to exec; fd limit - Wes */
+
+      logit("#pid %i accepted incoming connection and became pid %i", (int)parentPID, (int)getpid());
+
+      /* Setup misc com parameters */
+      hc->h = fd;
+      hc->fDCD = 1;
       memset(&dcb, 0, sizeof(dcb));
-      dcb.isTerminal = FALSE;
 
+#ifdef TELNET
+      dcb.fBinary	= FALSE;	/* Set true after negotiating this */
+      logit("#Negotiating Telnet Options");
+      negotiateTelnetOptions(hc);
+#else
       dcb.fBinary	= TRUE;
+#endif
 
-      SetCommState(ComGetHandle(hc), &dcb);
+      SetCommState(hc->h, &dcb);
       ComSetBaudRate(hc, 38400, NOPARITY, 8, ONESTOPBIT);
       _SetTimeoutBlock(hc);
 
+      /* Setup the suggested buffer sizes as the TCP buffer sizes */
+#ifdef BROKEN /* Makes max VERY slow under linux 2.0.30 -- WTF? -- Wes */
+      if ((optval = hc->txBufSize))
+	setsockopt(hc->h, SOL_SOCKET, SO_SNDBUF, (char *)&optval, optlen);
+      if ((optval = hc->rxBufSize))
+	setsockopt(hc->h, SOL_SOCKET, SO_RCVBUF, (char *)&optval, optlen);
+#endif
       hc->burstMode = TRUE; 
       hc->burstModePending = FALSE; /* turn off nagle by default */
  
-      /* Stuff a fake LF into the input stream to try and kick max 
+      /* Stuff a fake <esc> into the input stream to try and kick max 
        * into waking up faster.
        */
       hc->peekHack = '\n';
-
     }
   }
 
-  return hc->fDCD ? 1 : 0;
+  return hc->fDCD;
 }
 
-/** Write a string to the comm device. In the NT version,
- *  this just writes into the transmit ring. This version 
- *  just loops until all the bytes are written out, or
- *  something horrible happens.
- *
- *  @param	hc	Comm handle to write to
- *  @param	pvBuf	Buffer to write
- *  @param	dwCount	How many bytes to write
- *  @returns		TRUE if all bytes are written.
- */
-BOOL COMMAPI IpComWrite(HCOMM hc, PVOID pvBuf, DWORD dwCount)
+/** Push any coalesced TX bytes to the socket. */
+static BOOL ComTxFlush(HCOMM hc)
+{
+  BOOL ok;
+
+  if (!hc || !hc->txCoalesceLen)
+    return TRUE;
+
+  ok = _ComWriteRaw(hc, hc->txCoalesce, (DWORD)hc->txCoalesceLen);
+  hc->txCoalesceLen = 0;
+  return ok;
+}
+
+/** Write bytes immediately (no coalesce). Used by flush and bulk ComWrite. */
+static BOOL _ComWriteRaw(HCOMM hc, PVOID pvBuf, DWORD dwCount)
 {
   DWORD bytesWritten;
   DWORD totalBytesWritten;
@@ -584,8 +953,11 @@ BOOL COMMAPI IpComWrite(HCOMM hc, PVOID pvBuf, DWORD dwCount)
   if (!hc)
     return FALSE;
 
-  if (!IpComIsOnline(hc)) /* Don't write to the listen fd! */
+  if (!ComIsOnline(hc)) /* Don't write to the listen fd! */
     return FALSE;
+
+  if (dwCount == 0)
+    return TRUE;
 
   if (hc->burstMode != hc->burstModePending) /** see ComBurstMode() */
   {
@@ -594,8 +966,11 @@ BOOL COMMAPI IpComWrite(HCOMM hc, PVOID pvBuf, DWORD dwCount)
     int	optlen = sizeof(optval);
 
     optval = !hc->burstModePending;
+#if defined(COMMAPI_DEBUG)
+    logit("!%sabled nagle algorithm", optval ? "dis" : "en");
+#endif
 
-    retval = setsockopt(unixfd(hc), IPPROTO_TCP, TCP_NODELAY, (char *)&optval, optlen);
+    retval = setsockopt(hc->h, IPPROTO_TCP, TCP_NODELAY, (char *)&optval, optlen);
     if (retval == 0)
       hc->burstMode = hc->burstModePending;
   }
@@ -603,13 +978,17 @@ BOOL COMMAPI IpComWrite(HCOMM hc, PVOID pvBuf, DWORD dwCount)
   totalBytesWritten = 0;
   do
   {
-    bytesWritten = write(unixfd(hc), (char *)pvBuf + totalBytesWritten, dwCount - totalBytesWritten);
+    bytesWritten = telnet_write(hc, (char *)pvBuf + totalBytesWritten, dwCount - totalBytesWritten);
     if ((bytesWritten < 0) && (errno != EINTR))
     {
       logit("!Unable to write to socket (%s)", strerror(errno));
-      hc->fDCD = FALSE;
+      hc->fDCD = 0;
       return FALSE;
     }
+#if defined(WATCHDOG)
+    else
+      alarm(WATCHDOG_ACTIVITY_TIMEOUT);
+#endif
 
     if (bytesWritten != (dwCount - totalBytesWritten))
       sleep(0);
@@ -618,6 +997,65 @@ BOOL COMMAPI IpComWrite(HCOMM hc, PVOID pvBuf, DWORD dwCount)
   } while(totalBytesWritten < dwCount);
 
   return TRUE;
+}
+
+/** Write a buffer to the comm device.
+ *  In burst mode, append into the same coalesce buffer as ComPutc so short
+ *  strings (e.g. "\r\n" after every RIP line) do NOT flush ~20-byte packets.
+ *  Outside burst mode, flush pending data then write immediately.
+ */
+BOOL COMMAPI ComWrite(HCOMM hc, PVOID pvBuf, DWORD dwCount)
+{
+  const unsigned char *p;
+  DWORD left;
+
+  if (!hc)
+    return FALSE;
+
+  if (!ComIsOnline(hc))
+    return FALSE;
+
+  if (dwCount == 0)
+    return TRUE;
+
+  /* Burst path used by Display_File / Mdm_puts: pack everything. */
+  if (hc->burstModePending && hc->txCoalesce && hc->txCoalesceCap)
+  {
+    p = (const unsigned char *)pvBuf;
+    left = dwCount;
+
+    while (left)
+    {
+      size_t space = hc->txCoalesceCap - hc->txCoalesceLen;
+      size_t n;
+
+      if (space == 0)
+      {
+        if (!ComTxFlush(hc))
+          return FALSE;
+        continue;
+      }
+
+      n = (left < space) ? (size_t)left : space;
+      memcpy(hc->txCoalesce + hc->txCoalesceLen, p, n);
+      hc->txCoalesceLen += n;
+      p += n;
+      left -= (DWORD)n;
+
+      if (hc->txCoalesceLen >= hc->txCoalesceCap)
+      {
+        if (!ComTxFlush(hc))
+          return FALSE;
+      }
+    }
+
+    return TRUE;
+  }
+
+  if (!ComTxFlush(hc))
+    return FALSE;
+
+  return _ComWriteRaw(hc, pvBuf, dwCount);
 }
 
 /** Read data from the communications device. If we previously
@@ -631,14 +1069,18 @@ BOOL COMMAPI IpComWrite(HCOMM hc, PVOID pvBuf, DWORD dwCount)
  *  @param	pdwBytesRead [out]	Number of bytes which were actually read
  *  @returns				TRUE if some data was read
  */
-BOOL COMMAPI IpComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwBytesRead)
+BOOL COMMAPI ComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwBytesRead)
 {
   fd_set 	rfds;
   struct 	timeval tv;
   BOOL 		retval = FALSE;
   ssize_t	bytesRead = 0;
 
-  if (!IpComIsOnline(hc))
+  /* Deliver pending output before blocking for input (prompts, RIP end). */
+  if (!ComTxFlush(hc))
+    return FALSE;
+
+  if (!ComIsOnline(hc))
     return FALSE;
 
   if (dwBytesToRead == 0)
@@ -656,7 +1098,12 @@ BOOL COMMAPI IpComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwByt
     *pdwBytesRead = 1;
 
     if (--dwBytesToRead == 0)	/* Optimization for one-byte, post-peek read */
+    {
+#if defined(WATCHDOG)
+      alarm(WATCHDOG_ACTIVITY_TIMEOUT);
+#endif
       return TRUE;
+    }
 
     retval = TRUE;
   }
@@ -666,7 +1113,7 @@ BOOL COMMAPI IpComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwByt
   if (hc->burstMode)
   {
     tv.tv_sec = 0;
-    tv.tv_usec = 0;
+    tv.tv_usec = 1;
   }
   else
   {
@@ -683,12 +1130,13 @@ BOOL COMMAPI IpComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwByt
     }
   }
 
+  ComRead_getData:
   FD_ZERO(&rfds);
-  FD_SET(unixfd(hc), &rfds);
+  FD_SET(hc->h, &rfds);
 
-  if (select(unixfd(hc)+1, &rfds, NULL, NULL, &tv))
+  if (select(hc->h + 1, &rfds, NULL, NULL, &tv) != 0)
   {
-    bytesRead = read(unixfd(hc), pvBuf, dwBytesToRead);
+    bytesRead = telnet_read(hc, pvBuf, dwBytesToRead);
 
     if (bytesRead >= 0)
     {
@@ -700,13 +1148,17 @@ BOOL COMMAPI IpComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwByt
       if (hc->saddr_p)
       { 
 	logit("!Unable to read from socket (%s)", strerror(errno));
-        shutdown(unixfd(hc), 2);
-        hc->fDCD = FALSE;
+        shutdown(hc->h, 2);
+        hc->fDCD = 0;
       }
   
       retval = FALSE;
     }
   }
+
+#if defined(WATCHDOG)
+  alarm(WATCHDOG_ACTIVITY_TIMEOUT);
+#endif
 
   if ((bytesRead != dwBytesToRead) && (bytesRead > 0) && (retval == TRUE) && hc->ct.ReadIntervalTimeout)
   {
@@ -716,6 +1168,7 @@ BOOL COMMAPI IpComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwByt
 
     tv.tv_usec = (hc->ct.ReadIntervalTimeout * 1000) / 16; /* inter char timeout is in 1/16 of a ms */
     tv.tv_sec  = 0;
+    goto ComRead_getData;
   }
 
   return retval;
@@ -727,42 +1180,79 @@ BOOL COMMAPI IpComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwByt
  *  			was nothing to read or there was an error.
  *  @see		ComRead()
  */
-int COMMAPI IpComGetc(HCOMM hc)
+int COMMAPI ComGetc(HCOMM hc)
 {
   DWORD dwBytesRead;
   BYTE b;
 
-  if (!IpComIsOnline(hc))
+  if (!ComIsOnline(hc))
     return -1;
 
-  return (IpComRead(hc, &b, 1, &dwBytesRead) == 1) ? b : -1;
+  return (ComRead(hc, &b, 1, &dwBytesRead) == 1) ? b : -1;
 }
-
 
 /** "peek" by reading, and setting peekHack to the value
  *  read. ComRead will return this value as the first
  *  character in the buffer on the next read.
  */
-int COMMAPI IpComPeek(HCOMM hc)
+int COMMAPI ComPeek(HCOMM hc)
 {
-  if (!IpComIsOnline(hc))
+  unsigned char b;
+  ssize_t n;
+
+  if (!ComIsOnline(hc))
     return -1;
 
-  if (hc->peekHack == -1)
-    hc->peekHack = IpComGetc(hc);
+  /* Already holding a peeked byte */
+  if (hc->peekHack != -1)
+    return hc->peekHack;
 
-  return hc->peekHack;
+  /* NON-BLOCKING peek.  ComGetc()/ComRead() use ReadTotalTimeoutConstant
+   * (~125ms).  Mdm_keyp() -> mdm_avail() -> ComInCount() -> ComPeek() on
+   * every input poll, so a blocking peek made every keystroke feel lagged.
+   * timeout_read(..., 0) uses select with ~0.5ms spin only.
+   */
+  n = timeout_read(hc->h, &b, 1, 0);
+  if (n == 1)
+  {
+    hc->peekHack = (int)b;
+    return hc->peekHack;
+  }
+
+  return -1;
 }
 
-/** Write a single character to the com port */
-BOOL COMMAPI IpComPutc(HCOMM hc, int c)
+/** Write a single character to the com port.
+ *  While ComBurstMode is enabled (Display_File / Mdm_puts), bytes are
+ *  coalesced into large TCP writes. Outside burst mode, each character is
+ *  flushed immediately so interactive prompts stay snappy.
+ */
+BOOL COMMAPI ComPutc(HCOMM hc, int c)
 {
   BYTE b=(BYTE)c;
 
-  if (!IpComIsOnline(hc))
-    return -1;
+  if (!hc || !ComIsOnline(hc))
+    return FALSE;
 
-  return IpComWrite(hc, &b, 1);
+  if (!hc->txCoalesce || hc->txCoalesceCap == 0)
+    return _ComWriteRaw(hc, &b, 1);
+
+  if (hc->txCoalesceLen >= hc->txCoalesceCap)
+  {
+    if (!ComTxFlush(hc))
+      return FALSE;
+  }
+
+  hc->txCoalesce[hc->txCoalesceLen++] = b;
+
+  /* Interactive path: no burst batching — push each byte (or small prompt). */
+  if (!hc->burstModePending)
+    return ComTxFlush(hc);
+
+  if (hc->txCoalesceLen >= hc->txCoalesceCap)
+    return ComTxFlush(hc);
+
+  return TRUE;
 }
 
 /** Wait for a character to be placed in the input queue.
@@ -777,7 +1267,7 @@ BOOL COMMAPI IpComPutc(HCOMM hc, int c)
  *  @param	dwTimeOut	Time to wait, in msec
  *  @returns			TRUE if we can read without blocking.
  */
-BOOL COMMAPI IpComRxWait(HCOMM hc, DWORD dwTimeOut)
+BOOL COMMAPI ComRxWait(HCOMM hc, DWORD dwTimeOut)
 {
   fd_set fds;
   struct timeval tv;
@@ -789,15 +1279,15 @@ BOOL COMMAPI IpComRxWait(HCOMM hc, DWORD dwTimeOut)
     return TRUE;
 
   FD_ZERO(&fds);
-  FD_SET(unixfd(hc), &fds);
+  FD_SET(hc->h, &fds);
 
   tv.tv_sec = dwTimeOut / 1000;
   tv.tv_usec = dwTimeOut % 1000;
 
-  if (select(unixfd(hc) + 1, &fds, NULL, NULL, &tv) == 1)
+  if (select(hc->h + 1, &fds, NULL, NULL, &tv) == 1)
   {
-    if (hc->fDCD == FALSE)
-      (void)IpComIsOnline(hc);
+    if (hc->fDCD == 0)
+      (void)ComIsOnline(hc);
     return TRUE;
   }
 
@@ -816,7 +1306,7 @@ BOOL COMMAPI IpComRxWait(HCOMM hc, DWORD dwTimeOut)
  *  @param	hc		Communication handle to check
  *  @param	dwTimeOut	Time in milliseconds to wait
  */
-BOOL COMMAPI IpComTxWait(HCOMM hc, DWORD dwTimeOut)
+BOOL COMMAPI ComTxWait(HCOMM hc, DWORD dwTimeOut)
 {
   fd_set fds;
   struct timeval tv;
@@ -824,44 +1314,38 @@ BOOL COMMAPI IpComTxWait(HCOMM hc, DWORD dwTimeOut)
   if (!hc)
     return FALSE;
 
+  FD_ZERO(&fds);
+  FD_SET(hc->h, &fds);
+
   tv.tv_sec = dwTimeOut / 1000;
   tv.tv_usec = dwTimeOut % 1000;
 
-  if (IpComIsOnline(hc))
+  if (ComIsOnline(hc))
   {
-    FD_ZERO(&fds);
-    FD_SET(unixfd(hc), &fds);
-
-    if (select(unixfd(hc) + 1, NULL, &fds, NULL, &tv) < 0)
-      hc->fDCD = FALSE;
+    if (select(hc->h + 1, NULL, &fds, NULL, &tv) < 0)
+      hc->fDCD = 0;
   }
   else
-  {
-    if(hc->listenfd == -1)
-	return FALSE;
-    FD_ZERO(&fds);
-    FD_SET(hc->listenfd, &fds);
-
-    if (select(hc->listenfd + 1, &fds, NULL, NULL, &tv) == 1)
-      (void)IpComIsOnline(hc);
-  }
+    if (select(hc->h + 1, &fds, NULL, NULL, &tv) == 1)
+      (void)ComIsOnline(hc);
 
   return TRUE;
 }
 
+
 /** Returns the number of characters in the receive ring buffer.
- *  We can't really tell this portably with TCP/IP without writing
+ *  We can't really tell this with portably TCP/IP without writing
  *  an intermediary buffer layer. Instead, we return either 0 or 1;
- *  when we return 0 there is no data pending. This isn't a big
- *  deal, as multiple one-byte reads are a billion times cheaper
+ *  when we return 0 there is no data pending. This isn't as big
+ *  a deal, as multiple one-byte reads are a billion times cheaper
  *  than muiltiple one-byte writes, even with Nagle on in the
  *  latter case.
  *
- *  @param	hc	Maximus communication handle to query
+ *  @param	hc	Communication handle
  *  @returns		0 if there is no data to be read; 1 otherwise. Always
  *                      returns 0 if no connection has been made.
  */
-DWORD COMMAPI IpComInCount(HCOMM hc)
+DWORD COMMAPI ComInCount(HCOMM hc)
 {
   /* Okay, we need to fake this so that mdm_avail() will
    * work. Let's peek, if that works, return that there is
@@ -870,21 +1354,20 @@ DWORD COMMAPI IpComInCount(HCOMM hc)
 
   int ch;
 
-  if (!IpComIsOnline(hc))
+  if (!ComIsOnline(hc))
     return 0;
 
-  ch = IpComPeek(hc);
+  ch = ComPeek(hc);
 
   return (ch >= 0 ? 1 : 0);
 }
 
 /** Returns the number of bytes present in the transmit ring buffer.
- *  @param	hc	Maximus communication handle to query
  *  @returns 0
  */
-DWORD COMMAPI IpComOutCount(HCOMM hc)
+DWORD COMMAPI ComOutCount(HCOMM hc)
 {
-  IpComIsOnline(hc);
+  ComIsOnline(hc);
   return 0;
 }
 
@@ -892,87 +1375,63 @@ DWORD COMMAPI IpComOutCount(HCOMM hc)
  *  Under UNIX, we fudge this to be the size of the buffer. It
  *  doesn't really matter what the buffer size is, since ComWrite()
  *  won't return until we're done writing, but setting it too small
- *  will cause use to write too many packets (unless we enable nagle)
- *
- *  @param	hc	Maximus communication handle to query
- *  @returns		The transmit buffer size (if set) or 1KB
+ *  will cause use to send too many packets (unless we enable nagle)
  */
-DWORD COMMAPI IpComOutSpace(HCOMM hc)
+DWORD COMMAPI ComOutSpace(HCOMM hc)
 {
-  if (!IpComIsOnline(hc))
+  if (!ComIsOnline(hc))
     return 0;
 
   return hc->txBufSize ? : 1024;
 }
 
-/** Purge either or all of the tx and rx buffers.
- *  Since this isn't portably possible for TCP/IP, we
- *  instead read until there is no more data pending, and
- *  hope the write buffer is empty after giving up a timeslice.
- *
- *  @param	hc	Maximus communication handle to purge
- *  @param	fBuffer Which buffer to purge (bitmask) -- legal
- *                      values are COMM_PURGE_RX, COMM_PURGE_TX.
- */
-BOOL COMMAPI IpComPurge(HCOMM hc, DWORD fBuffer)
+/* Purge either or all of the tx and rx buffers */
+BOOL COMMAPI ComPurge(HCOMM hc, DWORD fBuffer)
 {
+  /* can't really fake a socket buffer purge, let's just
+   * read until we can't, and assume the out buf is empty.
+   */
+
 #if (COMM_PURGE_TX + COMM_PURGE_RX) != (COMM_PURGE_ALL)
 # error COMM_PURGE_* values in ntcomm.h are incorrect
 #endif
 
-  if (fBuffer & COMM_PURGE_RX)
-    while (IpComIsOnline(hc) && (ComGetc(hc) >= 0));
+  if (!hc)
+    return FALSE;
 
   if (fBuffer & COMM_PURGE_TX)
-    sleep(0);
+    hc->txCoalesceLen = 0;
+
+  if (fBuffer & COMM_PURGE_RX)
+    while (ComIsOnline(hc) && (ComGetc(hc) >= 0));
 
   return TRUE;
 }
 
-/** Return the "Windows" comm handle associated with the Maximus
- *  comm handle.
- *
- *  @param	hc	Maximus communication handle to query
- *  @returns		A "Windows" comm handle for the same
- *                      session.
- */
-COMMHANDLE COMMAPI IpComGetHandle(HCOMM hc)
+
+/** Return the file handle associated with this com port */
+OSCOMMHANDLE COMMAPI ComGetHandle(HCOMM hc)
 {
-  return (COMMHANDLE)hc->h;
+  return hc ? hc->h : -1;
 }
 
-/** Get information specific to the serial driver device control block.
- *  @param	hc	Maximus communication handle to query.
- *  @pdcb [out]		The DCB associated with the underlying COMMHANDLE.
- *  @returns		TRUE on success.
- */
+
+/** Get information specific to the serial driver device control block */
 BOOL COMMAPI ComGetDCB(HCOMM hc, LPDCB pdcb)
 {
-  return hc ? GetCommState(ComGetHandle(hc), pdcb) : FALSE;
+  return hc ? GetCommState(hc->h, pdcb) : FALSE;
 }
 
-/** Set information specific to the serial driver device control block.
- *  @param	hc	Maximus communication handle to update
- *  @pdcb [out]		The DCB we're associating with the underlying COMMHANDLE.
- *  @returns		TRUE on success.
- */ 
+
+
+/** Set information specific to the serial driver device control block */
 USHORT COMMAPI ComSetDCB(HCOMM hc, LPDCB pdcb)
 {
-  return hc ? SetCommState(ComGetHandle(hc), pdcb) : FALSE;
+  return hc ? SetCommState(hc->h, pdcb) : FALSE;
 }
 
-/** Set the baud rate of the com port, using the DCB functions.
- *  @param	hc	Maximus communication handle to update
- *  @param	dwBps	Baud rate -- integer value, e.g. 19200 -- NOT "B19200",
- *                      which just "happens" to be the same under MOST (but
- *                      not all) Unices.
- *  @param	bParity		Parity
- *  @param	bDataBits	Data Bits (word length)
- *  @param	bStopBits	Stops Bits
- *  @see	SetCommState
- *  @returns	TRUE on success
- */
-BOOL COMMAPI IpComSetBaudRate(HCOMM hc, DWORD dwBps, BYTE bParity, BYTE bDataBits, BYTE bStopBits)
+/** Set the baud rate of the com port, using the DCB functions */
+BOOL COMMAPI ComSetBaudRate(HCOMM hc, DWORD dwBps, BYTE bParity, BYTE bDataBits, BYTE bStopBits)
 {
   DCB dcb;
   BOOL rc;
@@ -980,7 +1439,7 @@ BOOL COMMAPI IpComSetBaudRate(HCOMM hc, DWORD dwBps, BYTE bParity, BYTE bDataBit
   if (!hc)
     return FALSE;
 
-  GetCommState(ComGetHandle(hc), &dcb);
+  GetCommState(hc->h, &dcb);
 
   dcb.BaudRate=dwBps;
 
@@ -988,51 +1447,38 @@ BOOL COMMAPI IpComSetBaudRate(HCOMM hc, DWORD dwBps, BYTE bParity, BYTE bDataBit
   dcb.Parity=bParity;
   dcb.StopBits=bStopBits;
 
-  rc=SetCommState(ComGetHandle(hc), &dcb);
+  rc=SetCommState(hc->h, &dcb);
   _SetTimeoutBlock(hc);
 
   return rc;
 }
 
-/** Get the baud rate of the com port, using the DCB functions.
- *  @param	hc	Maximus communication handle to query
- *  @returns	The baud rate, as a scalar value (not B19200, etc)
- *  @see ComSetBaudRate(), GetCommState()
- */
-DWORD IpComGetBaudRate(HCOMM hc)
+DWORD ComGetBaudRate(HCOMM hc)
 {
   DCB dcb;
 
-  GetCommState(ComGetHandle(hc), &dcb);
+  GetCommState(hc->h, &dcb);
 
   return dcb.BaudRate;
 }
 
-/** Stop the RX thread from trying to look for a character.  The TX       
- *  thread doesn't really need to be paused, since it won't try           
- *  to write anything unless we give it a character, but this txpause      
- *  semaphore ensures that nothign is transmitted.                        
- *
- *  @see	ComResume()
- *  @note	This is not implemented in the TCP/IP driver
- *  @returns	FALSE
- */
-BOOL COMMAPI IpComPause(HCOMM hc)
+BOOL COMMAPI ComPause(HCOMM hc)
+{
+  /* Stop the RX thread from trying to look for a character.  The TX        *
+   * thread doesn't really need to be paused, since it won't try            *
+   * to send anything unless we give it a character, but this txpause       *
+   * semaphore ensures that nothign is transmitted.                         */
+
+  return FALSE;
+}
+
+
+BOOL COMMAPI ComResume(HCOMM hc)
 {
   return FALSE;
 }
 
-/** Allow the RX thread to look for a character.
- *  @see	ComPause()
- *  @note	This is not implemented in the TCP/IP driver
- *  @returns	FALSE
- */
-BOOL COMMAPI IpComResume(HCOMM hc)
-{
-  return FALSE;
-}
-
-BOOL COMMAPI IpComWatchDog(HCOMM hc, BOOL fEnable, DWORD ulTimeOut)
+BOOL COMMAPI ComWatchDog(HCOMM hc, BOOL fEnable, DWORD ulTimeOut)
 {
 #ifndef __GNUC__
   (void)hc; (void)fEnable; (void)ulTimeOut;
@@ -1062,7 +1508,7 @@ BOOL COMMAPI IpComWatchDog(HCOMM hc, BOOL fEnable, DWORD ulTimeOut)
  *  @note		Calls in main max sources should be guarded with 
  *			#if (COMMAPI_VER > 1)
  */
-BOOL COMMAPI IpComBurstMode(HCOMM hc, BOOL fEnable)
+BOOL COMMAPI ComBurstMode(HCOMM hc, BOOL fEnable)
 {
   BOOL lastState;
   
@@ -1070,8 +1516,35 @@ BOOL COMMAPI IpComBurstMode(HCOMM hc, BOOL fEnable)
     return FALSE;
 
   lastState = hc->burstModePending;
+
+  /* Leaving burst mode: push the coalesced RIP/ANSI block now. */
+  if (lastState && !fEnable)
+    ComTxFlush(hc);
+
   hc->burstModePending = fEnable;
 
   return lastState;
 }
+
+/** Determine if the communications device is a modem,
+ *  as opposed to something else, like a listening
+ *  socket. Extension to Maximus COMM API by Wes.
+ *
+ *  @param	hc	The communications handle to check.
+ *  @returns		TRUE if the device is a modem.
+ *
+ *  @note		Calls in main max sources should be guarded with 
+ *			#if (COMMAPI_VER > 1)
+ */
+BOOL COMMAPI ComIsAModem(HCOMM hc)
+{
+  if (!hc)
+    return TRUE;
+
+  return FALSE;
+}
+
+
+
+
 

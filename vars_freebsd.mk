@@ -2,7 +2,7 @@
 
 EXTRA_CPPFLAGS	+= -DHAVE_TIMER_T -DBSD
 OS_LIBS		= -pthread
-MDFLAGS		+= -D__FreeBSD__ -DFREEBSD
+MDFLAGS		+= -D__FreeBSD__
 
 ifeq ($(PREFIX),)
 PREFIX		= /var/max

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_gets.c,v 1.8 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_gets.c,v 1.3 2003/06/06 01:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Maximus get-string function
 */
@@ -293,7 +291,7 @@ int mdm_gets(char *string, int type, int c, int max, char *prompt)
   char temp[PATHLEN];
   char *msgprompt;
   int timer2, rc;
-  byte ch=0, ch2 = 0;
+  byte ch=0;
 
   str=string;
   num_ch=0;
@@ -386,7 +384,6 @@ int mdm_gets(char *string, int type, int c, int max, char *prompt)
 
     switch (ch)
     {
-#ifndef UNIX
       case K_ONEMORE:      /* IBM extended key code */
         while (! Mdm_keyp())
         {
@@ -400,14 +397,15 @@ int mdm_gets(char *string, int type, int c, int max, char *prompt)
           Zoquo();
         }
 
-#if 0 /*K_ONEMORE == K_ESC*/  /* UNIX */
+#if K_ONEMORE == K_ESC /* UNIX */
 	if (Mdm_kpeek() == K_ESC)
 	{
 	  ch=(unsigned char)Mdm_getcw();
 	  if (ch == K_ESC)
 	    goto realEscape;
 	}
-#endif	
+#endif
+
 #if defined(TEST_VER) && defined(OS_2)
         else if (loc_peek()==K_ALTB)
         {
@@ -428,7 +426,6 @@ int mdm_gets(char *string, int type, int c, int max, char *prompt)
         else if ((rc=DoEditKey(type, string, Mdm_getcw(), c)) != FALSE)
           return rc;
         break;
-#endif
 
 #ifdef OS_2 /*PLF Sun  09-15-1991  16:29:12 */
       case K_CTRLC:
@@ -439,26 +436,21 @@ int mdm_gets(char *string, int type, int c, int max, char *prompt)
          }
          break;
 #endif
+
       case K_CTRLE:
         if ((type & INPUT_MSGENTER) && usr.video)
           return MSGENTER_UP;
         break;
-#ifndef UNIX
-       case K_VTDEL:         /* VT-100 DEL! */
-          if (usr.bits2 & BITS2_IBMCHARS)
-          {
-            DoEditKey(type, string, K_DEL, c);
-            break;
-          }
-        /* else fall-thru */
-#endif
 
-#ifdef UNIX
+      case K_VTDEL:         /* VT-100 DEL! */
+        if (usr.bits2 & BITS2_IBMCHARS)
+        {
+          DoEditKey(type, string, K_DEL, c);
+          break;
+        }
+        /* else fall-thru */
+        
       case K_BS:            /* BackSpace! */
-      case K_VTDEL:            /* BackSpace! */
-#else
-      case K_BS:            /* BackSpace! */      
-#endif
         if (!(type & INPUT_NOECHO))
           Mdmgets_Bs(type,c);
         break;
@@ -500,11 +492,12 @@ int mdm_gets(char *string, int type, int c, int max, char *prompt)
           Mdmgets_Clear(type);
         break;
 
+#if K_ONEMORE == K_ESC /* UNIX */
+      realEscape:
+#else
       case K_ESC:      /* ESC */
-
-	ch=Mdm_getcw();
-
-        if (ch == K_ESC)
+#endif
+        if ((ch=Mdm_getcw())==K_ESC)
         {
           if (type & INPUT_MSGENTER)
             return -1;
@@ -512,51 +505,19 @@ int mdm_gets(char *string, int type, int c, int max, char *prompt)
         else if (ch=='[' || ch=='O')
         {
           ch=Mdm_getcw();
-	
-	  switch(ch)
-	  {
-	    case 'A':
-		rc=DoEditKey(type, string, K_UP, c);
-		break;
-	    case 'B':
-		rc=DoEditKey(type, string, K_DOWN, c);
-		break;
-	    case 'C':
-		rc=DoEditKey(type, string, K_RIGHT, c);
-		break;
-	    case 'D':
-		rc=DoEditKey(type, string, K_LEFT, c);
-		break;
-#ifndef UNIX
-	    case 'H':
-		rc=DoEditKey(type, string, K_HOME, c);
-		break;
-	    case 'K':
-		rc=DoEditKey(type, string, K_END, c);
-		break;
-#else
-	    case '1': /* Home */
-		Mdm_getcw(); /* Just read the extra annoying char */
-		rc=DoEditKey(type, string, K_HOME, c);
-		break;
-	    case '4':
-		Mdm_getcw();
-		rc=DoEditKey(type, string, K_END, c);		
-		break;
-#endif		
-	  }
-	/*
+
           rc=DoEditKey(type,
                        string,
                        ch=='A' ? K_UP :    ch=='B' ? K_DOWN  :
                        ch=='C' ? K_RIGHT : ch=='D' ? K_LEFT  :
                        ch=='H' ? K_HOME  : ch=='K' ? K_END   : 0,
-                       c);*/
+                       c);
 
           if (rc != FALSE)
             return rc;
         }
         break;
+
 
       /* So a "+++" at a command prompt won't cause OUR modem to go        *
        * into cmd mode                                                     */

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: mb_qwk.c,v 1.13 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: mb_qwk.c,v 1.2 2003/06/04 23:46:22 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=QWK creation code for the BROWSE command
 */
@@ -312,13 +310,12 @@ static int near Create_Control_DAT(void)
 {
   char temp[PATHLEN];
   union stamp_combo sc;
-  static char ps_n[]="%s\r\n";
+  static char ps_n[]="%s\n";
 
   
   sprintf(temp, "%scontrol.dat", qwk_path);
     
-  if ((cdat=shfopen(temp, fopen_writep, O_RDWR | O_CREAT | O_BINARY |
-		    O_NOINHERIT))==NULL)
+  if ((cdat=shfopen(temp, fopen_writep, O_RDWR | O_CREAT | O_NOINHERIT))==NULL)
   {
     cant_open(temp);
     return -1;
@@ -332,7 +329,7 @@ static int near Create_Control_DAT(void)
   
   /* The name of this city - we don't know, so leave it blank */
   
-  fprintf(cdat, "\r\n");
+  fprintf(cdat, "\n");
 
   /* Phone number of this place */
 
@@ -341,11 +338,11 @@ static int near Create_Control_DAT(void)
 
   /* Name of the xxxxxxxx.QWK file */
 
-  fprintf(cdat,"0 ,%s\r\n", PRM(olr_name));
+  fprintf(cdat,"0 ,%s\n", PRM(olr_name));
 
   /* The current date */
 
-  fprintf(cdat,"%02d-%02d-%4d,%02d:%02d:%02d\r\n",
+  fprintf(cdat,"%02d-%02d-%4d,%02d:%02d:%02d\n",
                sc.msg_st.date.mo,
                sc.msg_st.date.da,
                sc.msg_st.date.yr+1980,
@@ -354,12 +351,14 @@ static int near Create_Control_DAT(void)
                sc.msg_st.time.ss << 1);
 
   /* Now add the user's name */
+  
+  strcpy(temp, usrname);
+  fprintf(cdat, "%s\n", cstrupr(temp));
 
-  fprintf(cdat, "%s\r\n", usrname);
 
-  fprintf(cdat, "\r\n");  /* Name of custom menu to display; none in this case*/
-  fprintf(cdat, "0\r\n"); /* ?? Unknown. */
-  fprintf(cdat, "0\r\n"); /* ?? Unknown. */
+  fprintf(cdat, "\n");  /* Name of custom menu to display; none in this case*/
+  fprintf(cdat, "0\n"); /* ?? Unknown. */
+  fprintf(cdat, "0\n"); /* ?? Unknown. */
 
 
   /* Save this position in the file for later */
@@ -367,8 +366,8 @@ static int near Create_Control_DAT(void)
   cdatpos=ftell(cdat);
   
   /* Write the highest conference number - this will be updated later */
-	
-  fprintf(cdat, "%-5u\r\n", 0);
+
+  fprintf(cdat, "%-5u\n", 0);
   
   /* Following this is a list of all the conferences containing messages.   *
    * We write these out as we're searching through the areas, so leave      *
@@ -623,7 +622,7 @@ int QWK_Status(BROWSE *b, char *aname, int colour)
 
   /* Add the conference "number" to the CONTROL.DAT file */
 
-  fprintf(cdat, "%d\r\n", this_conf);
+  fprintf(cdat, "%d\n", this_conf);
 
 
   QWKAddToCdat(&mah);
@@ -658,7 +657,7 @@ static void near QWKAddToCdat(PMAH pmah)
    * handle brain-dead readers.                                             */
 
   temp[12]='\0';
-  fprintf(cdat, "%s\r\n", *temp ? temp : "Unknown");
+  fprintf(cdat, "%s\n", *temp ? temp : "Unknown");
 }
 
 
@@ -736,8 +735,7 @@ static int near BuildQWKHeader(BROWSE *b)
   
   bprintf(qm.len, "%-6ld", MsgGetTextLen(b->m) / QWK_RECSIZE + 1);
   qm.msgstat=QWK_ACTIVE;
-  qm.confLSB=(byte)(this_conf & 0xffu);
-  qm.confMSB=(byte)((this_conf >> 8) & 0xffu);
+  qm.conf=this_conf;
   /*qm.wasread=(b->msg.attr & MSGREAD) ? '*' : ' ';*/
   /*qm.wasread=1;*/
   memset(qm.rsvd, ' ', sizeof(qm.rsvd));
@@ -783,25 +781,16 @@ static int near AddPersonalIndex(BROWSE *b, struct _qmndx *pqn)
 
 /* Generate the index record for this message */
 
-static int near BuildIndex(BROWSE *b, unsigned long this_rec, word this_conf)
+static int near BuildIndex(BROWSE *b, long this_rec, word this_conf)
 {
+  long ieee;
   struct _qmndx qmndx;
   int rc=TRUE;
-  byte exp=152;
-  
+
   /* Create the MSBinary-format .QWK index */
-
-  this_rec++;
-  while (!(this_rec & 0x800000L)) {
-    exp--;
-    this_rec <<= 1;
-  }
-
-  qmndx.mks_rec[0] = this_rec & 0xff;
-  qmndx.mks_rec[1] = (this_rec >> 8) & 0xff;
-  qmndx.mks_rec[2] = (this_rec >> 16) & 0x7f;
-  qmndx.mks_rec[3] = exp;
-
+  
+  ieee=long_to_ieee(this_rec+1);
+  ieee_to_msbin((unsigned long *)&ieee, (unsigned long *)&qmndx.mks_rec);
   qmndx.conf=(byte)(this_conf & 0xffu);
 
   if (!AddPersonalIndex(b, &qmndx))
@@ -904,14 +893,9 @@ static int near QWKInitializeHeaders(BROWSE *b, int qwkfile,
 /* Add all of the stuff to the packet that belongs before the message       *
  * body itself.                                                             */
 
-#ifdef MAX_TRACKER
 static void near QWKAddHeaderText(BROWSE *b, char *block, char **pblpos,
                                   int *pn_blocks, TRK_MSG_NDX *ptmn,
                                   char *ctrl, int *pdo_we_own)
-#else
-static void near QWKAddHeaderText(BROWSE *b, char *block, char **pblpos,
-				  int *pn_blocks, char *ctrl, int *pdo_we_own)
-#endif
 {
   struct _qwk_callback qc;      /* Used for passing info the QWK callback fn */
 
@@ -1015,9 +999,7 @@ static int near UpdateCounters(BROWSE *b)
 
 int QWK_Display(BROWSE *b)
 {
-#ifdef MAX_TRACKER
   TRK_MSG_NDX tmn;              /* Tracking record for this message */
-#endif
   char *block;                  /* Block used for output */
   char *blpos;                  /* Current position in block */
   char *ctrl;                   /* Kludges for this message */
@@ -1036,7 +1018,7 @@ int QWK_Display(BROWSE *b)
   /* Don't download messages which are older than the specified date */
 
   if (((union stamp_combo *)&b->msg.date_arrived)->ldate != 0 &&
-      !GEdate((union stamp_combo *)&b->msg.date_arrived, &scRestrict))
+      !GEdate(&b->msg.date_arrived, &scRestrict))
   {
     return 0;
   }
@@ -1063,11 +1045,7 @@ int QWK_Display(BROWSE *b)
 
   /* Add all of the pre-header text information */
 
-#ifdef MAX_TRACKER
   QWKAddHeaderText(b, block, &blpos, &n_blocks, &tmn, ctrl, &do_we_own);
-#else
-  QWKAddHeaderText(b, block, &blpos, &n_blocks, ctrl, &do_we_own);
-#endif
   QWKAddMsgBody(b, block, &blpos, &n_blocks);
 
   /* See if there's a file attached to this message */
@@ -1261,15 +1239,15 @@ static void near FinishControlDAT(void)
   */
 
 
-  fprintf(cdat, "HELLO\r\n");
-  fprintf(cdat, "NEWS\r\n");
-  fprintf(cdat, "GOODBYE\r\n");
-  fprintf(cdat, "0\r\n");
+  fprintf(cdat, cdat_hello);
+  fprintf(cdat, cdat_news);
+  fprintf(cdat, cdat_goodbye);
+  fprintf(cdat, "0\n");
 
   /* Now, finally update the "number of conferences" pointer */
 
   fseek(cdat, cdatpos, SEEK_SET);
-  fprintf(cdat,"%-5u\r\n", num_conf ? num_conf-1 : 0);
+  fprintf(cdat,"%-5u\n", num_conf ? num_conf-1 : 0);
 
   fclose(cdat);
 }
@@ -1303,12 +1281,8 @@ static int near QWK_Compress_Mail(BROWSE *b)
   sprintf(qwkname, "%s%s.qw%c", qwk_path, PRM(olr_name), qwk_ctr);
   unlink(qwkname);
 
-#ifndef UNIX
   sprintf(files, "%s*.*", qwk_path);
-#else
-  sprintf(files, "%s*", qwk_path);
-#endif  
-  
+
   Load_Archivers();
   
   while (usr.compress==0 || 
@@ -1325,28 +1299,20 @@ static int near QWK_Compress_Mail(BROWSE *b)
   }
   else
   {
-#ifndef UNIX
     char tmp[PATHLEN * 2];
-#endif
 
     Form_Archiver_Cmd(qwkname, files, cmd, pai->add);
 
     /* Add MaxPipe to the call */
 
-#ifndef UNIX
     sprintf(tmp, maxpipe_cmd, cmd);
     strcpy(cmd, tmp);
-#endif
 
     ret=Outside(NULL, NULL, OUTSIDE_RUN | OUTSIDE_NOFIX, cmd, FALSE,
                 CTL_NONE, 0, NULL);
   }
   
   Clean_QWK_Directory(FALSE);
-  
-#ifdef UNIX
-    adaptcase(qwkname);
-#endif
   
   if (ret != 0 || !fexist(qwkname))
   {
@@ -1489,15 +1455,14 @@ static void near GenerateStupidFiles(void)
   
   sprintf(fname, "%sDOOR.ID", qwk_path);
   
-  if ((fp=fopen(fname, "wb")) != NULL)
+  if ((fp=fopen(fname, "w")) != NULL)
   {
-    fprintf(fp, "DOOR = %s\r\n", us_short);
-    fprintf(fp, "VERSION = %s\r\n", version);
-    fprintf(fp, "SYSTEM = %s\r\n", xfer_id);
-    fprintf(fp, "CONTROLNAME = %s\r\n", cprog_name);
-/*    fprintf(fp, "CONTROLTYPE = ADD\r\n");
-    fprintf(fp, "CONTROLTYPE = DROP\r\n");
-*/
+    fprintf(fp, door_id_name, us_short);
+    fprintf(fp, door_id_ver, version);
+    fprintf(fp, door_id_sys, xfer_id);
+    fprintf(fp, door_id_cname, cprog_name);
+    fprintf(fp, door_id_ctype_add);
+    fprintf(fp, door_id_ctype_drop);
     fclose(fp);
   }
 

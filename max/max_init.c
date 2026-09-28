@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_init.c,v 1.7 2004/06/06 21:48:51 paltas Exp $";
+static char rcs_id[]="$Id: max_init.c,v 1.2 2003/06/04 23:46:21 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# tname=Initialization code
 */
@@ -116,9 +114,8 @@ void Init_Variables(void)
 
   fFlow=FALSE;
 
-  #ifdef UNIX
-  memset(&CommApi, 0, sizeof(struct CommApi_));
-  #endif
+
+
 
   menu_lines=1;
 
@@ -677,15 +674,22 @@ void Read_Prm(char *ctlname)
 
   /* Set the timeout counter... */
  
-  if (prm.input_timeout > 10) /* more than 60000 tics overflows a word */
+#ifdef UNIX
+  if ( prm.input_timeout > 120 )
+    prm.input_timeout = 120;
+
+  timeout_tics = ( (dword)prm.input_timeout * 60 ) * 100;
+#else
+  if ( prm.input_timeout > 10 ) /* more than 60000 tics overflows a word */
     prm.input_timeout = 10;
 
-  timeout_tics=((word)prm.input_timeout*60)*100;
+  timeout_tics = ( (word)prm.input_timeout * 60 ) * 100;
+#endif
   
   /* If it's less than one minute, default to four mins */
 
-  if (timeout_tics < 6000)
-    timeout_tics=4*60*100;
+  if ( timeout_tics < 6000 )
+    timeout_tics = 4 * 60 * 100;
 
 }
 
@@ -890,9 +894,6 @@ void Local_Beep(int n)
     #ifdef OS_2
       DosBeep(300, 250);
       DosSleep(100);
-    #elif UNIX
-      beep();
-      sleep(1);
     #else
       fputc('\a', stdout);
     

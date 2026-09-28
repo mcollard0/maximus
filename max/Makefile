@@ -54,8 +54,7 @@ mexcall.obj     mexoutp.obj     mextime.obj     mexlang.obj     \
 mexrip.obj      mexstr.obj      mexmarea.obj    mexfile.obj     \
 mexclass.obj    mexuser.obj     mexinp.obj      mextag.obj      \
 mexffind.obj    mexxtrn.obj     mexrtl.obj      max_accs.obj    \
-m_input.obj     m_lines.obj     f_okay.obj      atexit.obj	\
-xspawn.obj
+m_input.obj     m_lines.obj     f_okay.obj      atexit.obj
 
 #callfos.obj
 
@@ -93,15 +92,6 @@ max: $(OBJS) date.o
 max:
 	$(CXX) $(CFLAGS) $(LDFLAGS) $^ $(LOADLIBES) -o $@
 
-# max2 is the same as max, but most of the object files are
-# moved into an solib, to allow use to track function calls
-# with truss -ulibmax2
-libmax2.so: LD=gcc -shared
-max2:	$(MAXOBJ) cppmain.o date.o
-	$(CXX) $(CFLAGS) $(LDFLAGS) $^ -lmax2 $(LOADLIBES) -o $@
-
-libmax2.so: $(MOBJS) $(ZOBJS)
-
 bldupd.o: bldupd.h
 
 .PRECIOUS: ../util/maid $(LANGHDR)
@@ -113,8 +103,6 @@ $(LANGHDR): $(LANGSRC) ../util/maid
 	touch $<
 	../util/maid -d -p $<
 #	cp -f $@ $(SLIBDIR)\$(@:f)
-
-max.o: CPPFLAGS += -DINSTALL_PREFIX=\"$(PREFIX)\"
 
 max.o: $(LANGHDR) all.h proto.h modem.h all.h
 

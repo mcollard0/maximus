@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: sem_scop.c,v 1.3 2004/01/27 20:57:25 paltas Exp $";
+static char rcs_id[]="$Id: sem_scop.c,v 1.1.1.1 2002/10/01 17:54:04 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Scope opening/closing routines for compiler
 */
@@ -84,13 +82,13 @@ TYPEDESC * NewTypeDescriptor(void)
 
 DATAOBJ * NewDataObj(void)
 {
-  DATAOBJ *nd = NULL;
+  DATAOBJ *nd;
 
   if ((nd=malloc(sizeof(DATAOBJ)))==NULL)
     NoMem();
 
   memset(nd, '\0', sizeof(DATAOBJ));
-
+  
   return nd;
 }
 

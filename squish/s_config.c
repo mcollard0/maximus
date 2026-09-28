@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: s_config.c,v 1.7 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: s_config.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #include <stdio.h>
 #include <string.h>
@@ -29,11 +31,6 @@
 #include "squish.h"
 #include "s_dupe.h"
 
-#include "sqfeat.h"
-
-#ifdef UNIX
-#include <dlfcn.h>
-#endif
 
 #define ARGLEN  64
 #define MAXARGS 128
@@ -57,25 +54,19 @@ static void near InvalStatement(char *where)
 }
 
 
-#if defined(OS2) || defined(UNIX)
+#ifdef OS_2
+
 
 /* Add a DLL-oriented feature */
 
 static void near V_Feature(char *line, char *ag[])
 {
-
-#ifdef UNIX
-  void * sohandle = NULL;
-  char soname[256];
-  char * soerror;
-#endif
   struct _feature *pf;
   struct _feat_init fi;
-#ifndef UNIX
   char szFailName[PATHLEN];
   PFN pfnTest;
   int rc;
-#endif
+
   NW(line);
 
   pf=smalloc(sizeof(struct _feature));
@@ -84,8 +75,6 @@ static void near V_Feature(char *line, char *ag[])
   config.feat=pf;
 
   /* Try to load the module */
-
-#ifndef UNIX
 
   if ((rc=DosLoadModule(szFailName, PATHLEN, pf->pszDLLName, &pf->hmod)) != 0)
   {
@@ -117,51 +106,6 @@ static void near V_Feature(char *line, char *ag[])
     exit(ERL_ERROR);
   }
 
-#else
-    sprintf(soname, "lib%s.so", strlwr(pf->pszDLLName));
-    if(!(sohandle = dlopen(soname, RTLD_LAZY)))
-    {
-        (void)printf("Can't open lib (check your /etc/ld.so.conf) '%s'!\n",
-                 soname);
-	exit(ERL_ERROR);
-    }
-
-    pf->pfnInit = dlsym(sohandle, "FeatureInit");
-    if((soerror = dlerror()) != NULL)
-    {
-	fprintf(stderr, "Lib error: %s\n", soerror);
-	exit(1);
-    }
-
-    pf->pfnConfig = dlsym(sohandle, "FeatureConfig");
-    if((soerror = dlerror()) != NULL)
-    {
-	fprintf(stderr, "Lib error: %s\n", soerror);
-	exit(1);
-    }
-
-    pf->pfnNetMsg = dlsym(sohandle, "FeatureNetMsg");
-    if((soerror = dlerror()) != NULL)
-    {
-	fprintf(stderr, "Lib error: %s\n", soerror);
-	exit(1);
-    }
-
-    pf->pfnTossMsg = dlsym(sohandle, "FeatureTossMsg");
-    if((soerror = dlerror()) != NULL)
-    {
-	fprintf(stderr, "Lib error: %s\n", soerror);
-	exit(1);
-    }
-
-    pf->pfnScanMsg = dlsym(sohandle, "FeatureScanMsg");
-    if((soerror = dlerror()) != NULL)
-    {
-	fprintf(stderr, "Lib error: %s\n", soerror);
-	exit(1);
-    }
-
-#endif
 
   /* Initialize the feature info structure */
 
@@ -1168,7 +1112,7 @@ static struct _cfgtable vt[]=
   {"areasbbs",        NULL,         VB_FILE,&config.areasbbs, 0},
   {"routing",         V_Routing,    VB_FILE,&config.routing,  0},
   {"logfile",         NULL,         VB_FILE,&config.logfile,  0},
-#if defined(OS_2) || defined(UNIX)
+#ifdef OS_2
   #ifdef __FLAT__
     {"feature",         NULL,         VB_FUNC,NULL,             0},
     {"feature32",       V_Feature,    VB_FUNC,NULL,             0},
@@ -1182,10 +1126,9 @@ static struct _cfgtable vt[]=
 
 #define vtlen (unsigned)(sizeof(vt)/sizeof(vt[0]))
 
-#ifndef __GNUC__
-#pragma on(check_stack) /* Stack checking for our config file parser */
-#endif
 
+#pragma on(check_stack) /* Stack checking for our config file parser */
+         
 static void near Parse1Config(char *cfgname, char *args[MAXARGS],
                               char *in, char *line)
 {
@@ -1285,7 +1228,7 @@ static void near Parse1Config(char *cfgname, char *args[MAXARGS],
         break;
       }
 
-#if defined (OS_2) || defined (UNIX) /* Feature-specific config lines */
+#ifdef OS_2 /* Feature-specific config lines */
     {
       struct _feature *pf;
       struct _feat_config fc;
@@ -1301,31 +1244,23 @@ static void near Parse1Config(char *cfgname, char *args[MAXARGS],
         char *s;
 
         /* Search through the config name */
-#ifndef UNIX
+
         for (p=pf->pszConfigName; p; p=strchr(p, '\r'))
-#else
-        for (p=pf->pszConfigName; p; p=strchr(p, '\r'))	
-#endif
         {
           /* Skip over the \r, if necessary */
-#ifndef UNIX
+
           if (*p=='\r')
-#else
-          if (*p=='\n')
-#endif	  
             p++;
 
 
           /* The next \r or end of string delimits the length of keyword */
-#ifndef UNIX
+
           if ((s=strchr(p, '\r'))==NULL)
-#else
-          if ((s=strchr(p, '\n'))==NULL)	  
-#endif	  
             s=p+strlen(p);
 
 
           /* Compare it to our keyword */
+
           if (eqstrni(args[0], p, (unsigned)(s-p)))
           {
             if ((*pf->pfnConfig)(&fc))
@@ -1374,9 +1309,9 @@ static void near Parse1Config(char *cfgname, char *args[MAXARGS],
   
   (void)fclose(cfgfile);
 }
-#ifndef __GNUC__
+
 #pragma off(check_stack) /* Stack checking for our config file parser */
-#endif
+
 
 /* External entrypoint for config file parser */
 

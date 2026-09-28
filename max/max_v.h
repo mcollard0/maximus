@@ -116,16 +116,18 @@ extrn long dspwin_time IS(0L);  /* Timeout for the display window           */
 
 
 #ifdef UNIX
-extrn char slogan[] IS(CLS "%sMAXIMUS Version %s%s\n");
+extrn char slogan[] IS(CLS "%sMAXIMUS-CBCS %s%s\n");
 #else
-extrn char slogan[] IS(CLS "%sMAXIMUS Version %s%s\n");
+extrn char slogan[] IS(CLS "%sMAXIMUS-CBCS %s%s\n");
 #endif
                     
 extrn char copyright[] IS("Copyright 1989, " THIS_YEAR " by Lanius Corporation.  All rights reserved.\n\n");
 
 #if 0
 extrn char dev_info[] IS(LMAGENTA "Design by Scott Dudley.\n"
-                                  "Development by Scott Dudley, Peter Fitzsimmons and David Nugent.\n"
+                                  "Development by Scott Dudley, Peter Fitzsimmons, David Nugent and Michael Collard\n"
+				  "UNIX port by Wes Garland, Bo Simonsen and R.F. Jones.\n"
+				  "Linux Version By: Michael Collard.\n\n"
 
                          LRED "For technical support, send mail to tech@lanius.com or \"Tech\" at 1:249/106.\n"
                          LRED "For more information on Maximus, send mail to sales@lanius.com, or write to:\n\n"
@@ -136,19 +138,20 @@ extrn char dev_info[] IS(LMAGENTA "Design by Scott Dudley.\n"
                                 "    CANADA  K7M 5N3\n\n");
 #else
 extrn char dev_info[] IS(LMAGENTA "Design by Scott Dudley.\n"
-                                  "Development by Scott Dudley, Peter Fitzsimmons and David Nugent.\n"
-				  "UNIX port by Wes Garland, Bo Simonsen and R.F. Jones.\n\n"
+                                  "Development by Scott Dudley, Peter Fitzsimmons, David Nugent and Michael Collard\n"
+				  "UNIX port by Wes Garland, Bo Simonsen and R.F. Jones.\n"
+				  "Linux Version By: Michael Collard.\n\n"
 
 			LRED "Maxmius is no longer supported by Lanius Corporation, however the source\n"
 			LRED "code for Maximus has been made freely available under the terms of the\n"
-			LRED "GNU General Public License (GPL).\n"
+			LRED "GNU Public License (GPL).\n"
 			LRED "\n"
-			YELLOW "You can download the source code for Maximus on the World Wide Web at\n"
-			YELLOW "at http://maximus.sourceforge.net/, or by FidoNet FREQ at x:xxx/xxx\n"
+			YELLOW "Download the source code for Maximus at\n"
+			YELLOW "https://github.com/mcollard0/maximus\n"
 			LRED "\n"
 			LRED "For technical support, please post a message on the FidoNet MUFFIN echo.\n"
-			LRED "Alternatively, you may contact Bo Simonsen via FidoNet routed netmail at\n"
-			LRED "2:236/100, or via internet e-mail as bo@geekworld.dk\n\n");
+			LRED "Alternatively, you may contact Wes Garland via FidoNet routed netmail at\n"
+			LRED "1:249/128, or via internet e-mail as wes@ninja250.kingston.net\n\n");
 #endif
                        
 extrn char fopen_read[] IS("r");     /* Flags for using fopen() calls */
@@ -339,7 +342,6 @@ extrn char usrname[LEN(sizeof(usr.name))]; /* Name/alias of current user   */
 
 
 extrn char local;                       /* If we're in local mode          */
-extrn char tcpip;
 extrn char displaymode;                 /* Local display mode              */
 extrn char snoop;                       /* If we see what's on the screen. */
 extrn char keyboard;                    /* If we can type.  Implies snoop. */
@@ -433,7 +435,11 @@ extrn unsigned long max_time;           /* -t parameter                    */
 extrn unsigned long baud;               /* User's current baud rate        */
 extrn unsigned long last_bps;           /* Transfer rate of last file sent */
 extrn unsigned long input_timeout;      /* Timer for caller sleep timeout  */
+#ifdef UNIX
+extrn dword         timeout_tics;       /* Default # of csecs before t'out */
+#else
 extrn word          timeout_tics;       /* Default # of csecs before t'out */
+#endif
 
 extrn long ultoday;                     /* Kbytes uploaded on this call    */
 extrn dword last_lastread;              /* Initial val of lread ptr        */

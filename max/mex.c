@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: mex.c,v 1.4 2004/01/28 06:38:11 paltas Exp $";
+static char rcs_id[]="$Id: mex.c,v 1.1.1.1 2002/10/01 17:52:23 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 #define MEX_VM
 
@@ -187,7 +185,11 @@ static struct _usrfunc _intrinfunc[]=
   {"vidsync",                 intrin_vidsync,                 0},
   {"write",                   intrin_write,                   0},
   {"writeln",                 intrin_writeln,                 0},
-  {"xfertime",                intrin_xfertime,                0}
+  {"xfertime",                intrin_xfertime,                0},
+  /* Sentinel: VmRun walks this table by uf->name; without a NULL end
+   * marker every MEX program segfaults on return from main() when
+   * looking up intrinsic quad (VMADDR)-1. */
+  {NULL,                      NULL,                           0}
 };
 
 /* EnterSymtabBlank
@@ -238,8 +240,14 @@ static void near MexStoreMarea(struct mex_marea * pma, PMAH pMah)
 
 static void near MexStoreFarea(struct mex_farea * pfa, PFAH pFah)
 {
+  /* fah may be empty on a fresh session; never deref a null heap. */
+  if (!pfa)
+    return;
+  if (!pFah)
+    pFah = &fah;
+
   MexKillStructString(mex_farea, pfa, name);
-  StoreString(MexPtrToVM(pfa), struct mex_farea, name,      pFah->heap ? PFAS(pFah, name) : "" );   
+  StoreString(MexPtrToVM(pfa), struct mex_farea, name,      (pFah->heap) ? PFAS(pFah, name) : "" );
   MexKillStructString(mex_farea, pfa, descript);
   StoreString(MexPtrToVM(pfa), struct mex_farea, descript,  pFah->heap ? PFAS(pFah, descript) : "");
   MexKillStructString(mex_farea, pfa, downpath);

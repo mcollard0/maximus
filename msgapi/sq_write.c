@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: sq_write.c,v 1.4 2004/01/27 21:01:49 paltas Exp $";
+static char rcs_id[]="$Id: sq_write.c,v 1.2 2003/06/05 22:54:50 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 #define MSGAPI_HANDLERS
 #define MSGAPI_NO_OLD_TYPES
@@ -37,7 +35,7 @@ static char rcs_id[]="$Id: sq_write.c,v 1.4 2004/01/27 21:01:49 paltas Exp $";
 #include "api_sq.h"
 #include "apidebug.h"
 
-#include "structrw.h"
+
 
 
 /* This function searches the list of free frames to find one which is      *
@@ -468,7 +466,7 @@ static unsigned near _SquishWriteXmsg(HMSG hmsg, PXMSG pxm, dword *pdwOfs)
       return FALSE;
     }
 
-  if (write_xmsg(HSqd->sfd, &xmsg) != 1)
+  if (write_xmsg(HSqd->sfd, (char *)&xmsg) != 1)
   {
     msgapierr=MERR_NODS;
     return FALSE;

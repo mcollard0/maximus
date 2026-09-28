@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: maid.c,v 1.6 2005/10/19 10:57:10 paltas Exp $";
+static char rcs_id[]="$Id: maid.c,v 1.2 2003/06/05 03:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 #define MAX_INCL_LANGUAGE
 #define MAX_INCL_VER
@@ -49,7 +47,7 @@ static char rcs_id[]="$Id: maid.c,v 1.6 2005/10/19 10:57:10 paltas Exp $";
 
 #define MAX_HEAP_STR   256
 
-/* Huh? Static doesn't work ... */
+/* non-static: max_vr.h declares extern char *version when MAX_INCL_VER */
 char *version=VERSION;
 static char *heap;
 static char *hptr;

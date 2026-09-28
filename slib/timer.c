@@ -27,10 +27,6 @@
 
 #include <dos.h>
 #include <time.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 #include "prog.h"
 
 #if defined(OS_2)
@@ -88,43 +84,29 @@ long _stdc timerset(unsigned int duration)
 }
 
 #elif defined(UNIX)
+#include <sys/time.h>
+#include <unistd.h>
 
-/*long _stdc timerset(unsigned int duration)
+long _stdc timerset( unsigned int duration )
 {
-  #ifndef CLK_TCK
-    #define CLK_TCK 100
-  #endif
-
-  return ((clock() + duration) * ((long)CLK_TCK / 100L));
-}*/
-
-long _stdc timerset(unsigned int duration)
-{
-    struct tm* dt;
-    time_t t;
-    struct timeval tv;
-    
-    t= time(NULL);
-    
-    dt = gmtime(&t);    
-    gettimeofday(&tv, NULL);
-//    tv.tv_usec = (tv.tv_usec + 500) / 1000;
-    tv.tv_usec = tv.tv_usec / 1000;
-
-    return ( ((dt->tm_min % 60)*6000L) +
-             ((dt->tm_sec % 60)*100L) +
-             tv.tv_usec / 10L +
-             (long)duration
-            );
+  struct timespec ts;
+  clock_gettime( CLOCK_MONOTONIC, &ts );
+  return ( ((long)ts.tv_sec * 100L) + ((long)ts.tv_nsec / 10000000L) + (long)duration );
 }
-
 
 #else
   #error Unknown OS
 #endif
 
-int _stdc timeup(long timer)
+int _stdc timeup( long timer )
 {
+#ifdef UNIX
+  struct timespec ts;
+  long now;
+  clock_gettime( CLOCK_MONOTONIC, &ts );
+  now = ((long)ts.tv_sec * 100L) + ((long)ts.tv_nsec / 10000000L);
+  return ( (now - timer) >= 0L );
+#else
   long now;
 
   now=timerset (0);
@@ -133,20 +115,22 @@ int _stdc timeup(long timer)
     now += 360000L;
 
   return ((now-timer) >= 0L);
+#endif
 }
 
 
-void _stdc timer(unsigned int duration)
+void _stdc timer( unsigned int duration )
 {
   long tim;
 
-  tim=timerset(duration);
+  tim = timerset( duration );
 
-  while (! timeup(tim))
+  while ( !timeup( tim ) )
 #ifdef UNIX
-    sleep(0)
-#endif
+    usleep( 1000 );
+#else
     ;
+#endif
 }
 
 

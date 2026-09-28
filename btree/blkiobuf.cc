@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: blkiobuf.cc,v 1.3 2004/01/22 09:02:29 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: blkiobuf.cc,v 1.1.1.1 2002/10/01 17:49:21 sdudley Exp $";
+#pragma on(unreferenced)
 
 #include <stdio.h>
 #include <string.h>
@@ -215,7 +217,7 @@ int BLKIOBUF::_insert_list(NNUM nn, char *pcDiskNode, unsigned fSetDelta)
       printf("\a***couldn't get lru block\n");
     }
 
-    delete [] (char *)pvBlock;
+    delete [] pvBlock;
   }
 
   return BLOCKBUF::put(nn, pcDiskNode, fSetDelta);

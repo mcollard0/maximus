@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: vm_run.c,v 1.5 2004/01/27 20:57:25 paltas Exp $";
+static char rcs_id[]="$Id: vm_run.c,v 1.2 2003/06/05 01:10:36 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 #define VM_INIT
 #define COMPILING_MEX_VM
@@ -168,22 +166,12 @@ void kill_str(IADDR *strptr, IADDR *ptrptr)
 {
   IADDR new;
 
-  if (strptr->segment != SEG_GLOBAL)
-    vm_err("kill_str: non-global segment");
-
-  /* If the offset is zero, then it's just a blank string, so we can quit */
-
-  if (strptr->offset==0)
-    return;
-
-  /* Now free the string that this address points to */
-
-  hpfree(strptr->offset);
-
-
-  /* Now set the string descriptor to point to an empty string at
-   * pbDs:0000.
-   */
+  /* Do not hpfree() here. On this 64-bit port, string descriptors are often
+   * constants, mis-sized temps, or already-freed blocks; hpfree() then
+   * SIGSEGV/longjmps and drops the caller (every $mex option). The whole
+   * data segment is released in vm_cleanup() when the MEX program ends, so
+   * leaking heap strings for the life of one script is safe and simple. */
+  NW(strptr);
 
   new.segment=SEG_GLOBAL;
   new.offset=0;
@@ -198,9 +186,23 @@ void kill_str(IADDR *strptr, IADDR *ptrptr)
 
 void EXPENTRY MexKillString(IADDR *pwhere)
 {
-  IADDR where=*(IADDR *)MexFetch(FormString, pwhere);
+  IADDR empty;
+  IADDR *pdesc;
 
-  kill_str(&where, pwhere);
+  /* Clear the descriptor in place. Do not follow/free the prior string
+   * payload — see kill_str(). Fetch the descriptor cell as FormAddr so we
+   * get a pointer to the IADDR itself rather than interpreting it twice. */
+  if (!pwhere)
+    return;
+
+  pdesc = (IADDR *)MexFetch(FormAddr, pwhere);
+  if (!pdesc)
+    return;
+
+  empty.segment = SEG_GLOBAL;
+  empty.offset = 0;
+  empty.indirect = FALSE;
+  *pdesc = empty;
 }
 
 
@@ -319,19 +321,25 @@ void * fetch(FORM form, IADDR *where)
 
     got=*(IADDR *)ret;
   }
-  
+
   switch (got.segment)
   {
-    case SEG_AR:      return (pbBp+got.offset);
+    /* Local AR offsets are stored as two's-complement VMADDR values
+     * (e.g. 0xfffffffe == -2). On 16/32-bit hosts, pointer+unsigned wrap
+     * gave the right address; on 64-bit, zero-extending 0xfffffffe walks
+     * ~4GiB past pbBp and SIGSEGVs (userlist ASSIGN word to Local:-2). */
+    case SEG_AR:      return (pbBp + (sdword)got.offset);
     case SEG_GLOBAL:  return (pbDs+got.offset);
     case SEG_TEMP:
       switch(form)
       {
-        case FormByte:  return ((void *)&regs_1[got.offset-1000]);
-        case FormWord:  return ((void *)&regs_2[got.offset-2000]);
-        case FormDword: return ((void *)&regs_4[got.offset-4000]);
-        case FormAddr:  
-        case FormString:return ((void *)&regs_6[got.offset-6000]);
+        /* Temp offsets are 1+(type_size*MAX_TEMP)+reg — see GetTemporary().
+         * The historic 6000 base assumed sizeof(IADDR)==6; use the real size. */
+        case FormByte:  return ((void *)&regs_1[got.offset - (sizeof(byte)  * MAX_TEMP)]);
+        case FormWord:  return ((void *)&regs_2[got.offset - (sizeof(word)  * MAX_TEMP)]);
+        case FormDword: return ((void *)&regs_4[got.offset - (sizeof(dword) * MAX_TEMP)]);
+        case FormAddr:
+        case FormString:return ((void *)&regs_6[got.offset - (sizeof(IADDR) * MAX_TEMP)]);
         default:        vm_err(err_invalid_reg);
       }
       break;
@@ -361,7 +369,7 @@ int store(IADDR *dest, FORM form, void *val)
     case FormDword: *(dword *)dp=*(dword *)val; break;
     case FormAddr:  *(IADDR *)dp=*(IADDR *)val; break;
     default:          vm_err(err_invalid_optype);
-  } 
+  }
   
   return 0;
 }
@@ -373,6 +381,9 @@ int store(IADDR *dest, FORM form, void *val)
 
 
 /* Add to the intrinsic function table */
+
+/* Count of live entries in usrfn (excludes any NULL sentinel). */
+static unsigned short n_usrfn = 0;
 
 static int near add_intrinsic_functions(unsigned short uscIntrinsic,
                                         struct _usrfunc *puf)
@@ -386,6 +397,7 @@ static int near add_intrinsic_functions(unsigned short uscIntrinsic,
   int rc=TRUE;
 
   usrfn=puf;
+  n_usrfn=uscIntrinsic;
 
   for (uf=usrfn, i=(VMADDR)-2L; uf < usrfn+uscIntrinsic; uf++, i--)
   {
@@ -668,32 +680,45 @@ static int near VmRun(char *pszArgs)
         printf("\n");
       #endif
     }
-    
-    for (uf=usrfn; uf->name; uf++)
-      if (vaIp==uf->quad)
+
+    /* main() returns to (VMADDR)-1 — done, do not scan intrinsics. */
+    if (vaIp == (VMADDR)-1L)
+      break;
+
+    /* Dispatch intrinsic by assigned quad. Bound by n_usrfn and/or
+     * NULL name so a missing sentinel cannot walk off the table. */
+    {
+      unsigned found = 0;
+      unsigned i;
+
+      for (i = 0, uf = usrfn; usrfn && i < n_usrfn && uf->name; i++, uf++)
       {
-        Push(pbBp, byte *);
+        if (vaIp == uf->quad)
+        {
+          Push(pbBp, byte *);
 
-        pbBp=pbSp;
+          pbBp = pbSp;
 
-        if (pfnHookBefore)
-          (*pfnHookBefore)();
+          if (pfnHookBefore)
+            (*pfnHookBefore)();
 
-        pop_size=(*uf->fn)();
+          pop_size = (*uf->fn)();
 
-        if (pfnHookAfter)
-          (*pfnHookAfter)();
+          if (pfnHookAfter)
+            (*pfnHookAfter)();
 
-        Pop(pbBp, byte *);
-        Pop(vaIp, VMADDR);
+          Pop(pbBp, byte *);
+          Pop(vaIp, VMADDR);
 
-        pbSp += pop_size;
-
-        break;
+          pbSp += pop_size;
+          found = 1;
+          break;
+        }
       }
-      
-    if (uf->name==NULL && vaIp != (VMADDR)-1L)
-      vm_err("abnormal program termination");
+
+      if (!found)
+        vm_err("abnormal program termination");
+    }
   }
   while (vaIp != (VMADDR)-1L);
 

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: vm_read.c,v 1.4 2005/10/19 10:57:10 paltas Exp $";
+static char rcs_id[]="$Id: vm_read.c,v 1.1.1.1 2002/10/01 17:54:17 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 #define COMPILING_MEX_VM
 
@@ -31,7 +29,8 @@ static char rcs_id[]="$Id: vm_read.c,v 1.4 2005/10/19 10:57:10 paltas Exp $";
 #include "vm.h"
 
 
-void NoMem(void)
+/* Local name: prog.h / unix_misc.c already export non-static NoMem */
+static void MexNoMem(void)
 {
   (*pfnLogger)("!MEX:  out of memory reading file");
 }
@@ -65,9 +64,10 @@ static int VmReadFileHdr(BFILE b)
   
   if ((pbDs=malloc(vmh.lGlobSize + vmh.lStackSize + vmh.lHeapSize))==NULL)
   {
-    NoMem();
+    MexNoMem();
     return -1;
   }
+
 
   /* Initialize the system heap */
 
@@ -94,7 +94,7 @@ static int VmReadFileHdr(BFILE b)
   
   if ((pinCs=malloc(sizeof(INST) * high_cs))==NULL)
   {
-    NoMem();
+    MexNoMem();
     return -1;
   }
 
@@ -201,7 +201,7 @@ static int VmReadFuncExports(BFILE b)
     if (Bread(b, (char *)&dfd, sizeof(dfd)) != sizeof(dfd) ||
         (pfd=malloc(sizeof(struct _funcdef)))==NULL)
     {
-      NoMem();
+      MexNoMem();
       return -1;
     }
 
@@ -242,7 +242,7 @@ static int VmReadFuncImports(BFILE b)
 
     if (pvma==NULL || Bread(b, (char *)pvma, (unsigned)size) != size)
     {
-      NoMem();
+      MexNoMem();
       return -1;
     }
 

@@ -17,7 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: trackc.cc,v 1.3 2004/01/22 09:02:29 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: trackc.cc,v 1.1.1.1 2002/10/01 17:49:31 sdudley Exp $";
+#pragma on(unreferenced)
 
 #include <stdio.h>
 #include "dbase.h"
@@ -32,7 +34,7 @@ TRK BEXPENTRY TrkOpen(char *szName, unsigned fNewFile)
   grow_handles(40);
 
   TRK t=new TRACKER;
-  
+
   // Try to open the tracking file with the specified parameters
 
   if (t && !t->open(szName, fNewFile))
@@ -40,7 +42,7 @@ TRK BEXPENTRY TrkOpen(char *szName, unsigned fNewFile)
     delete t;
     t=NULL;
   }
-  
+
   return t;
 }
 

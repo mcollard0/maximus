@@ -58,8 +58,7 @@ struct _qmhdr
   byte replyto[8];
   byte len[6];
   byte msgstat;   /* See QWK_xxx, above */
-  byte confLSB;
-  byte confMSB;
+  word conf;
 /*byte wasread;*/
   byte rsvd[3];
 };
@@ -69,7 +68,7 @@ struct _qmhdr
 
 struct _qmndx
 {
-  byte mks_rec[4];
+  unsigned long mks_rec;
   byte conf;
 };
 

@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: display.c,v 1.4 2004/01/27 21:00:26 paltas Exp $";
+static char rcs_id[]="$Id: display.c,v 1.2 2003/06/06 01:18:58 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=.BBS-file display routines
 */
@@ -53,6 +51,7 @@ static sword near DisplayFilesBbs(DSTK *d);
 
 static word near DispParsePriv(DSTK *d);
 static void near PF(DSTK *d, word n);
+static sword near DisplayRipRaw(DSTK *d);
 
 
 int _stdc Display_File(word type, char *nonstop, char *fname,...)
@@ -155,7 +154,8 @@ static void near DisplayInitDstk(DSTK *d, byte *nonstop)
 
     /*lastmenu=0;*/
 
-    d->ck_abort=d->automore=TRUE;
+    d->ck_abort=TRUE;
+    d->automore=(d->type & DISPLAY_NOAUTOMORE) ? FALSE : TRUE;
 
     /* So that the nonstop-more command will carry across file areas */
 
@@ -232,7 +232,9 @@ static sword near DisplayOneFile(DSTK *d)
   *d->filename='\0';
   *last_onexit='\0';
 
-  if (d->type & DISPLAY_FILESBBS)
+  if (d->type & DISPLAY_RIPRAW)
+    ret=DisplayRipRaw(d);
+  else if (d->type & DISPLAY_FILESBBS)
   {
     #ifndef ORACLE
       ret=DisplayFilesBbs(d);
@@ -250,35 +252,88 @@ static sword near DisplayOpenFile(DSTK *d)
 {
   d->bbsfile=-1;
 
-  /* DLN 28 Feb 95 Try to open a .RBS file first (if RIP support is enabled) */
+  /* DLN 28 Feb 95 Try to open a .rip or .rbs file first (if RIP support is enabled) */
 
   if (hasRIP())
   {
-    sprintf(d->scratch, ss, d->filename, dotrbs);
+    int opened_rbs=FALSE;
 
+    /* Prefer compiled .rbs (MECCA tokens expanded at runtime: [sys_name],
+     * [remain], ACS lines) over raw .rip which leaves bracket tokens literal.
+     * Splash art typically has only .rip and still uses the fast path. */
+    sprintf(d->scratch, ss, d->filename, dotrbs);
     d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
 
-    /* DLN 03 Mar 95 Suppress local output for .RBS files by default */
+    if (d->bbsfile==-1)
+    {
+      sprintf(d->scratch, "%s.RBS", d->filename);
+      d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+    }
 
     if (d->bbsfile != -1)
+      opened_rbs=TRUE;
+
+    if (d->bbsfile==-1)
+    {
+      sprintf(d->scratch, "%s.rip", d->filename);
+      d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+    }
+
+    if (d->bbsfile==-1)
+    {
+      sprintf(d->scratch, "%s.RIP", d->filename);
+      d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+    }
+
+    /* DLN 03 Mar 95 Suppress local output for RIP/RBS files by default */
+
+    if (d->bbsfile != -1)
+    {
       d->type |= DISPLAY_NOLOCAL;
+      /* Raw .rip scenes blast via ComWrite. .rbs is MECCA-compiled and must
+       * go through DisplayNormal so tokens like sys_name/remain resolve. */
+      if (!opened_rbs)
+        d->type |= DISPLAY_RIPRAW;
+    }
   }
 
-  /* Try to open a .GBS file */
+  /* Try to open a .ans / .ANS or .gbs / .GBS file */
 
   if (d->bbsfile==-1 && usr.video==GRAPH_ANSI)
   {
-    sprintf(d->scratch, ss, d->filename, dotgbs);
-
+    sprintf(d->scratch, "%s.ans", d->filename);
     d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+
+    if (d->bbsfile==-1)
+    {
+      sprintf(d->scratch, "%s.ANS", d->filename);
+      d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+    }
+
+    if (d->bbsfile==-1)
+    {
+      sprintf(d->scratch, ss, d->filename, dotgbs);
+      d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+    }
   }
 
-  /* If that didn't work, try a .BBS file */
+  /* If that didn't work, try a .asc / .ASC or .bbs / .BBS file */
   
   if (d->bbsfile==-1)
   {
-    sprintf(d->scratch, ss, d->filename, dotbbs);
+    sprintf(d->scratch, "%s.asc", d->filename);
+    d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+  }
 
+  if (d->bbsfile==-1)
+  {
+    sprintf(d->scratch, "%s.ASC", d->filename);
+    d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
+  }
+
+  if (d->bbsfile==-1)
+  {
+    sprintf(d->scratch, ss, d->filename, dotbbs);
     d->bbsfile=shopen(d->scratch, O_RDONLY | O_BINARY | O_NOINHERIT);
   }
 
@@ -370,6 +425,73 @@ static sword near DispCloseFiles(DSTK *d, sword ret)
 }
 
 
+
+
+/* Send a RIPscrip scene the same way the door test server does: large
+ * ComWrite chunks with no Mdm_putc/AVATAR/halt-per-char overhead. An 8MB
+ * splash was CPU-bound at millions of halt()/ComPeek() and Mdm_putc calls.
+ */
+static sword near DisplayRipRaw(DSTK *d)
+{
+#if (COMMAPI_VER > 1)
+  extern HCOMM hcModem;
+  BOOL lastState = ComBurstMode(hcModem, TRUE);
+#endif
+  byte was_no_local=no_local_output;
+  byte *big=NULL;
+  /* MUST NOT use sword (16-bit): read(64K) casts 65536 → 0 and sends nothing. */
+  ssize_t got;
+  size_t chunk=65536;
+  size_t i;
+
+  no_local_output=TRUE;
+  d->ret=DRET_OK;
+
+  /* Prefer a large read buffer; fall back to the 512-byte display buffer. */
+  big=malloc(chunk);
+  if (!big)
+  {
+    big=d->filebufr;
+    chunk=FILEBUFSIZ;
+  }
+
+  for (;;)
+  {
+    got=read(d->bbsfile, big, chunk);
+    if (got <= 0)
+      break;
+
+    if (!local && !no_remote_output)
+    {
+#if (COMMAPI_VER > 1)
+      if (!ComWrite(hcModem, big, (DWORD)got))
+      {
+        d->ret=DRET_BREAK;
+        break;
+      }
+#else
+      for (i=0; i < (size_t)got; i++)
+        Mdm_putc(big[i]);
+#endif
+    }
+
+    /* Abort check once per chunk, not every 3 bytes. */
+    if (d->ck_abort && halt())
+    {
+      d->ret=DRET_BREAK;
+      break;
+    }
+  }
+
+  if (big && big != d->filebufr)
+    free(big);
+
+#if (COMMAPI_VER > 1)
+  ComBurstMode(hcModem, lastState);
+#endif
+  no_local_output=was_no_local;
+  return d->ret;
+}
 
 
 static sword near DisplayNormal(DSTK *d)

@@ -17,12 +17,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifdef UNIX
-#error "None unix"
-#endif
-
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: shell.c,v 1.3 2004/01/27 21:01:49 paltas Exp $";
+static char rcs_id[]="$Id: shell.c,v 1.1.1.1 2002/10/01 17:54:28 sdudley Exp $";
 #pragma on(unreferenced)
 
 #pragma library("../msgapi.lib");

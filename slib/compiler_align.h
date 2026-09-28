@@ -78,6 +78,11 @@
 #if defined(__x86) || defined(x86) || defined(__x86__)
 # define SLOPPY_ALIGNMENT_OKAY  1
 #endif
+
+/* x86-64 allows unaligned access (same as i386 for Maximus purposes) */
+#if defined(__x86_64__) || defined(__amd64__) || defined(__x86_64) || defined(__amd64)
+# define SLOPPY_ALIGNMENT_OKAY  1
+#endif
  
 #if !defined(SLOPPY_ALIGNMENT_OKAY)
 # if defined(__WATCOMC__) || defined(MSC_VER) || defined(__TURBOC__) || defined(__IBMC__) || defined(__TOPAZ__)

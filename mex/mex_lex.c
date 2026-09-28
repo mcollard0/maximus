@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: mex_lex.c,v 1.4 2004/01/27 20:57:25 paltas Exp $";
+static char rcs_id[]="$Id: mex_lex.c,v 1.2 2003/06/05 01:10:36 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -411,13 +409,16 @@ static int near process_string(void)
 
     if (sptr-str >= slen-1)
     {
+      /* Save offset before realloc; pointer arithmetic on olds is UAF if block moves. */
+      size_t off=(size_t)(sptr-str);
       olds=str;
       str=realloc(str, slen += STR_BLOCK);
 
       if (str==NULL)
         NoMem();
 
-      sptr = str+(sptr-olds);
+      NW(olds);
+      sptr = str+off;
     }
 
     /* Check for the end-of-string quote */

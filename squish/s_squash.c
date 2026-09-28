@@ -17,41 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/**
- * @file	s_squash.c
- * @author	Scott J. Dudley
- * @version	$Id: s_squash.c,v 1.8 2004/01/22 08:04:28 wmcbrine Exp $
- *
- * $Log: s_squash.c,v $
- * Revision 1.8  2004/01/22 08:04:28  wmcbrine
- * Changed all the "static char rcs_id[]=" stuff to comments. Which works just
- * as well, but doesn't produce any warnings. :-)
- *
- * Revision 1.7  2003/12/14 17:40:19  paltas
- * Fixed different things (can't remember all of it.. )
- *
- * Revision 1.6  2003/11/18 23:04:18  paltas
- * This _might_ remove the .Flo issue..
- *
- * Revision 1.5  2003/09/03 13:51:33  paltas
- * /Linux instead of /UNIX on Linux machines
- *
- * Revision 1.4  2003/07/26 00:03:58  rfj
- * Squish (and MSGAPI) updates as suggested by Bo Simonsen, including correcting
- * a \ to / for UNIX systems, changes concerning packet file name case, via line
- * time stamp change, and s_toss.c table filled in (only for UNIX compiles for
- * now).
- *
- * Also updated squish version number to 1.12 beta.
- *
- * Revision 1.3  2003/06/18 02:00:17  wesgarland
- * Modified to detect when compressed packets wind up with the compressor's
- * extension rather than Squish's intended (e.g. .su0, mo3) extension.
- *
- * Based on changes submitted by Bo Simonsen; modified to have lowercase extensions
- * for the ?ut filenames, where the ? is the mail flavour (FLO)
- *
- */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: s_squash.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
 #define NOVARS
 
@@ -244,55 +212,6 @@ static int near Add_To_Archive(byte *arcname, NETADDR *found, byte *pktname, NET
            ai->arcname, Address(found), fsize(pktname), temp);
 
   arcret=CallExtern(cmd, TRUE);
-
-  if (arcret==0 && !fexist(arcname) && fexist(pktname))
-  {
-    /* Wes: Sometimes, for reasons not well understood by man,
-     * software just doesn't do what it's told. One example of
-     * such software would be LHarc for UNIX v1.02. It ignores
-     * the requested extension (e.g. .SU0) and instead replaces
-     * it with its own extension (.LZH). How foolish!
-     *
-     * This is a generic fix to try and guess the name of the
-     * archive, and rename it properly.
-     */
-
-    char 	filespec[FILENAME_MAX];
-    char	rootname[FILENAME_MAX];
-    char 	*filename = NULL;
-    char 	*dot;
-    FFIND      	*ff;
-
-    strncpy(rootname, arcname, sizeof(rootname));
-    rootname[sizeof(rootname) - 1] = (char)0;
-    dot = strchr(rootname, '.');
-    if (dot)
-      *dot = (char)0;
-
-    snprintf(filespec, sizeof(filespec), "%s.%s", rootname, ai->extension ? : "???");
-    if ((ff = FindOpen(filespec, 0)))
-    {
-      filename = strdup(ff->szName);
-      if (!filename)
-	NoMem();
-
-      if (FindNext(ff) == 0)
-      {
-	S_LogMsg("!Found more than one compressed bundle matching %s!", filespec);
-	S_LogMsg("!Offending bundles: %s and %s", filename, ff->szName);
-	free(filename);
-	filename=NULL;
-      }
-      else
-      {
-	S_LogMsg("+Archiver generated filename %s; expected %s (renaming)",
-		 filename, arcname);
-	if (rename(filename, arcname))
-	  S_LogMsg("!Unable to rename %s to %s! (%s)", filename, arcname, strerror(errno));
-	free(filename);
-      }
-    }
-  }
 
   if (arcret==0 && !fexist(arcname) && fexist(pktname))
   {
@@ -553,8 +472,8 @@ void FloName( byte *out, NETADDR * n, byte flavour, word addmode)
 
   MakeOutboundName(n, out);
   flavptr=out+strlen(out);
-
-  flavptr[0]=(byte) (addmode ? '?' : tolower(flav));
+  
+  flavptr[0]=(byte)(addmode ? '?' : flav);
   flavptr[1]='l';
   flavptr[2]='o';
   flavptr[3]='\0';
@@ -570,7 +489,7 @@ void FloName( byte *out, NETADDR * n, byte flavour, word addmode)
       /* If we don't find anything useful, assume that we're using the      *
        * given flavour.                                                     */
 
-      *flavptr=tolower(flav);
+      *flavptr=flav;
 
 
       /* Copy the flo style of the found filename into the filename that    *
@@ -584,7 +503,7 @@ void FloName( byte *out, NETADDR * n, byte flavour, word addmode)
 
         if (foundflav != 'F')
         {
-          *flavptr=tolower(foundflav);
+          *flavptr=foundflav;
           break;
         }
       }
@@ -596,7 +515,7 @@ void FloName( byte *out, NETADDR * n, byte flavour, word addmode)
     {
       /* Didn't find anything, so use the requested flavour */
 
-      *flavptr=tolower(flav);
+      *flavptr=flav;
     }
   }
 }
@@ -1301,20 +1220,29 @@ static void near RV_Send(byte *line,byte *ag[],NETADDR nn[],word num)
       }
       else if (noarc)
       {
+        if (flavour=='F' || flavour=='O')
+        {
+          /* Skip over the current packet so that MatchOutNext doesn't go
+           * into an infinite loop.
+           */
+
+          if (mo->fFromHole)
+            mo->hpkt++;
+        }
+        else
+        {
           /* Nothing to archive, so just add to a packet */
 
           MakeOutboundName(&mo->found, temp);
-	  if(flavour == 'F' || flavour == 'O')
-	    (void)sprintf(temp+strlen(temp), "%cut", (int) 'o');
-	  else
-            (void)sprintf(temp+strlen(temp), "%cut", (int) tolower(flavour));
+
+          (void)sprintf(temp+strlen(temp), "%cut", flavour);
 
           if (! eqstri(mo->name, temp))
           {
             (void)Merge_Pkts(mo->name, temp);
             HoleRemoveFromList(mo->name);
           }
-          
+        }
       }
       else
       {
@@ -1505,7 +1433,7 @@ static void near RV_Route(byte *line,byte *ag[],NETADDR nn[],word num)
 
         MakeOutboundName(&dest, temp);
 
-        (void)sprintf(temp+strlen(temp), "%cut", (int)(flavour=='F' ? 'o' : tolower(flavour)));
+        (void)sprintf(temp+strlen(temp), "%cut", flavour=='F' ? 'O' : flavour);
 
         /* Remap the packet header, if necessary */
 

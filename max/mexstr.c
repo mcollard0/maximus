@@ -50,11 +50,9 @@
     MA ma;
     IADDR arg, where;
     word wLen;
-    char *s=NULL, *buf=NULL;
+    char *s, *buf;
     int pad;
     char ch;
-
-    fPadleft = 0;
 
     MexArgBegin(&ma);
     s=MexArgGetNonRefString(&ma, &arg, &wLen);
@@ -68,10 +66,9 @@
 
     /* If we need to pad this string */
 
-    if (pad && (wLen < pad) && (buf=malloc(pad)))
+    if (pad && wLen < pad && (buf=malloc(pad)) != NULL)
     {
       int padlen=pad-wLen;
-
       char *p=(fPadleft) ? buf+padlen : buf;
 
       memmove(p, s, wLen);

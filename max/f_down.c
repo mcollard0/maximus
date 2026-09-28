@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: f_down.c,v 1.4 2004/01/27 21:00:28 paltas Exp $";
+static char rcs_id[]="$Id: f_down.c,v 1.1.1.1 2002/10/01 17:51:03 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=File area routines: D)ownload command and associated functions
 */
@@ -319,9 +317,7 @@ int File_Get_Download_Names(int do_tag,sword protocol)
           if (!CanAddFileEntry())
             break;
 
-#ifndef UNIX
           strupr(ff->szName);
-#endif
 
           if (CanDownload(&fah, ff->szName, &flag, fpath))
           {
@@ -1344,12 +1340,8 @@ word File_Send_Files(sword protocol, char *mname, char *newuppath, int flag)
     
     if (current_col+strlen(s) >= TermWidth())
       Puts("\n\x19 \x06");
-
-#ifndef UNIX    
+    
     Printf("%s ", cstrupr(s));
-#else
-    Printf("%s ", s);
-#endif
   }
 
   Putc('\n');

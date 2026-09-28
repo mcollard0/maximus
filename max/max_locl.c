@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max_locl.c,v 1.6 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max_locl.c,v 1.2 2003/06/04 23:37:33 wesgarland Exp $";
 #pragma on(unreferenced)
-#endif
 
 /*# name=Local command functions
 */
@@ -177,9 +175,6 @@ static int near Parse_Priv_Adjust(int ch)
 {
   switch (ch)
   {
-#ifdef UNIX  
-    case K_ESC:
-#endif    
     case 0:
 #ifdef TTYVIDEO
       if (displaymode==VIDEO_IBM)
@@ -187,31 +182,13 @@ static int near Parse_Priv_Adjust(int ch)
       {
         switch (loc_getch())
         {
-#ifdef UNIX
-	  case '[':
-	  case 'O':
-	  
-	  switch(loc_getch())
-	  {
-#endif	
-	
-#ifdef UNIX
-	  case 'A':
-#else	  
           case K_UP:
-#endif	  
             WinPickAction(vp,PICK_UP);
             break;
-#ifdef UNIX
-	  case 'B':
-#else
+
           case K_DOWN:
-#endif	  
             WinPickAction(vp,PICK_DOWN);
             break;
-#ifdef UNIX
-	  }
-#endif	  	    
         }
       }
       break;
@@ -238,7 +215,6 @@ static int near Parse_Priv_Adjust(int ch)
       Find_Class_Number();
       return 0;
 
-#ifndef UNIX
     case '\x1b':
 #ifdef TTYVIDEO
       if (displaymode==VIDEO_IBM)
@@ -255,7 +231,7 @@ static int near Parse_Priv_Adjust(int ch)
       }
 #endif
       return 0;
-#endif
+
     default:
       ch=toupper(ch);
 
@@ -350,26 +326,8 @@ static int near Parse_Local_Normal(int ch)
             ci_nerd();
           break;
 
-/* Bo: Don't look at this code it's _very_ ugly but it works */
-
-#ifdef UNIX
-	case '[':
-	case 'O':
-	
-	c = loc_getch();
-	
-	switch(c)
-	{
-#endif	
-	
-#ifndef UNIX
         case K_UP:
         case K_PGUP:
-#else
-	case '5':
-	    loc_getch();
-	case 'A':	    
-#endif	
           timeoff += (c==K_UP) ? 60 : 300;
           sent_time_almostup=FALSE;
           sent_time_5left=FALSE;
@@ -377,23 +335,14 @@ static int near Parse_Local_Normal(int ch)
                    c==K_UP ? blank_str : "s",timeleft());
           break;
 
-#ifndef UNIX
         case K_DOWN:
         case K_PGDN:
-#else	
-	case '6':
-	    loc_getch();
-	case 'B':
-#endif
           timeoff -= (c==K_DOWN) ? 60 : 300;
           sent_time_almostup=FALSE;
           sent_time_5left=FALSE;
           LocalMsg(min_less,c==K_DOWN ? 1 : 5,
                    c==K_DOWN ? blank_str : "s",timeleft());
           break;
-#ifdef UNIX
-	}
-#endif		  
       }
       break;
 

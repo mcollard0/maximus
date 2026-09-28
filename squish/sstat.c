@@ -17,9 +17,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/* $Id: sstat.c,v 1.6 2004/01/22 08:04:28 wmcbrine Exp $ */
+#pragma off(unreferenced)
+static char rcs_id[]="$Id: sstat.c,v 1.2 2003/06/05 03:13:40 wesgarland Exp $";
+#pragma on(unreferenced)
 
-#define DEBUG
+/*#define DEBUG*/
 
 #include <stdio.h>
 #include <string.h>
@@ -33,8 +35,6 @@
 static struct _ahlist *ahlist=NULL;
 static struct _nodtot *nodtot=NULL;
 static struct _sscfg sc;
-
-char statfile[128];
 
 void _fast NoMem(void);
 
@@ -95,8 +95,8 @@ static void near ReadArea(int fd, struct _ahlist *al, struct _tarea *ta)
     
     #ifdef DEBUG
     printf("    Node         = %s\n", Address(&tn.node));
-    printf("        OutMsgs  = %ld\n", (unsigned long) tn.out_msgs);
-    printf("        OutBytes = %ld\n", (unsigned long) tn.out_bytes);
+    printf("        OutMsgs  = %ld\n", tn.out_msgs);
+    printf("        OutBytes = %ld\n", tn.out_bytes);
     #endif
 
     /* Only process the specified nodes */
@@ -146,15 +146,12 @@ static void near ReadArea(int fd, struct _ahlist *al, struct _tarea *ta)
 
 static void near ParseStats(int fd)
 {
-  int found;
   struct _thdr th;
   struct _tarea tarea;
-  struct _ahlist *al; 
+  struct _ahlist *al;
 
   while (read(fd, (char *)&th, sizeof th)==sizeof th)
   {
-    found = FALSE;
-
     if (th.type != TYPE_AREA)
     {
       lseek(fd, th.len, SEEK_CUR);
@@ -168,20 +165,17 @@ static void near ParseStats(int fd)
 
     #ifdef DEBUG
     printf("Area: %s\n", tarea.tag);
-    printf(" InMsgs: %lu\n", (unsigned long) tarea.in_msgs);
-    printf("InBytes: %lu\n", (unsigned long) tarea.in_bytes);
+    printf(" InMsgs: %lu\n", tarea.in_msgs);
+    printf("InBytes: %lu\n", tarea.in_bytes);
     #endif
 
     for (al=ahlist; al; al=al->next)
       if (eqstri(tarea.tag, al->tag))
-      {
-        found = TRUE;
-	break;
-      }
+        break;
 
     /* This area not found */
 
-    if (found == FALSE)
+    if (al==NULL)
     {
       al=smalloc(sizeof(struct _ahlist));
 
@@ -222,7 +216,7 @@ static void near CalcTotals(dword *total_in_bytes, dword *total_in_msgs)
   struct _ahlist *al;
   struct _stlist *sl;
 
-  total_in_bytes=total_in_msgs=0;
+  *total_in_bytes=*total_in_msgs=0;
 
   for (al=ahlist; al; al=al->next)
   {
@@ -240,11 +234,8 @@ static void near CalcTotals(dword *total_in_bytes, dword *total_in_msgs)
     if (al->total_out_bytes==0 && al->total_out_msgs==0)
       continue;
 
-    total_in_bytes += al->in_bytes;
-    total_in_msgs  += al->in_msgs;
-    #ifdef DEBUG
-	printf("Total in bytes: %d\nTotal in msgs: %d\n\n", (int) total_in_bytes, (int) total_in_msgs);
-    #endif
+    *total_in_bytes += al->in_bytes;
+    *total_in_msgs  += al->in_msgs;
   }
 }
 
@@ -265,20 +256,20 @@ static void near CalculateStats(dword total_in_bytes, dword total_in_msgs)
     printf("\nArea %s\n", al->tag);
 
     printf("  BYTES IN : %8ld (%02d.%02d%% of total bytes in)\n",
-    	   (unsigned long) al->in_bytes*100L,
+           al->in_bytes*100L,
            (int)(al->in_bytes*100/total_in_bytes),
            (int)((al->in_bytes*10000/total_in_bytes) % 100));
 
     printf("  BYTES OUT: %8ld\n",
-           (unsigned long) al->total_out_bytes*100L);
+           al->total_out_bytes*100L);
 
     printf("   MSGS IN : %8ld (%02d.%02d%% of total msgs in)\n",
-           (unsigned long) al->in_msgs,
-           (int) (al->in_msgs*100/total_in_msgs),
-           (int) ((al->in_msgs*10000/total_in_msgs) % 100));
+           al->in_msgs,
+           (int)(al->in_msgs*100/total_in_msgs),
+           (int)((al->in_msgs*10000/total_in_msgs) % 100));
 
     printf("   MSGS OUT: %8ld\n\n",
-           (unsigned long) al->total_out_msgs);
+           al->total_out_msgs);
 
     /* Don't log areas with no output */
 
@@ -306,8 +297,8 @@ static void near CalculateStats(dword total_in_bytes, dword total_in_msgs)
 
       printf("   %-15s %8ld %6ld %3d.%02d%% %3d.%02d%% %6.02f%% %6.02f%%\n",
              Address(&sl->node),
-             (unsigned long) sl->out_bytes*100L,
-             (unsigned long) sl->out_msgs,
+             sl->out_bytes*100L,
+             sl->out_msgs,
              Percent(sl->out_bytes, al->total_out_bytes),
              Percent(sl->out_msgs,  al->total_out_msgs),
              (float)area_percent_bytes,
@@ -332,8 +323,8 @@ static void near CalculateStats(dword total_in_bytes, dword total_in_msgs)
   {
     printf("   %-15s  %05.02f%% %05.02f%%\n",
            Address(&nt->node),
-           (float) nt->total_percent_bytes,
-           (float) nt->total_percent_msgs);
+           nt->total_percent_bytes,
+           nt->total_percent_msgs);
   }
 
 }
@@ -408,15 +399,6 @@ static void near ParseConfigLine(char *line)
       }
     }
   }
-  else if(eqstri(s, "statfile"))
-  {
-    while ((s=strtok(NULL, cfgdelim)) != NULL)
-    {
-	strcat(statfile, s);
-    }
-    
-  }
-  
   else
   {
     printf("Invalid keyword in config file: `%s'\n", s);
@@ -430,27 +412,18 @@ static void near ParseConfigLine(char *line)
 static void near ParseConfig(char *cfg)
 {
   FILE *fp;
-  char * envConfig = NULL;
-  char * tmp = NULL;
   char line[PATHLEN];
   
   sc.node=NULL;
   sc.area=NULL;
   sc.do_all=FALSE;
-
-  if ((envConfig = getenv("SQUISH")))
-  {
-    if((tmp = strrchr(envConfig, '/')))
-    {
-	strncpy(cfg, envConfig, tmp - envConfig);
-	cfg[tmp - envConfig] = '\0';
-#ifdef UNIX
-	strcat(cfg, "/sstat.cfg");
+  
+  if (cfg==NULL)
+#ifndef UNIX
+    cfg="SSTAT.CFG";
 #else
-	strcat(cfg, "\SSTAT.CFG");
-#endif	
-    }
-  }
+    cfg="sstat.cfg";
+#endif
   
   if ((fp=shfopen(cfg, "r", O_RDONLY))==NULL)
   {
@@ -472,25 +445,17 @@ int _stdc main(int argc, char *argv[])
 {
   dword total_in_bytes, total_in_msgs;
   int fd;
-  char cfg[128];
-
-  memset(statfile, 0, 128);
 
   NW(argc);
   NW(argv);
   
-  ParseConfig(cfg);
+  ParseConfig(argv[1]);
 
-  if(statfile[0] == 0)
-  {
-    #ifndef UNIX
-	strcpy(statfile, "SQUISH.STT");
-    #else
-	strcpy(statfile, "squish.stt");		
-    #endif
-  }
-
-  if ((fd=open(statfile, O_RDONLY | O_BINARY))==-1)
+#ifndef UNIX
+  if ((fd=open("SQUISH.STT", O_RDONLY | O_BINARY))==-1)
+#else
+  if ((fd=open("squish.stt", O_RDONLY | O_BINARY))==-1)
+#endif
   {
     printf("Error!  No statistics file to read!\n");
     return 1;

@@ -17,7 +17,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#define N_INTRINFUNC (sizeof(_intrinfunc)/sizeof(_intrinfunc[0]))
+/* Exclude trailing {NULL,NULL,0} sentinel from the live intrinsic count. */
+#define N_INTRINFUNC ((sizeof(_intrinfunc)/sizeof(_intrinfunc[0])) - 1)
 #define StoreString(str, type, field, val) MexStoreStringAt(str + offsetof(type, field), val)
 
 #define StoreByteString(str, type, field, val, size) MexStoreByteStringAt(str + offsetof(type, field), val, size)
@@ -54,7 +55,7 @@ struct _mex_instance_stack    // Instance info for this invocation of MEX
 #endif
   sdword cbPriorMsg;
   sdword cbPriorFile;
-} __attribute__((packed));
+};
 
 
 /* Definitions for the open() flags */

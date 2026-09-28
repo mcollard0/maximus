@@ -41,6 +41,8 @@
 #define DISPLAY_PCALL     0x20 /* Increment the #-of-callers count          */
 #define DISPLAY_MENUHELP  0x40 /* If we should use menuhelp for usr.help    */
 #define DISPLAY_NOLOCAL   0x80 /* Don't display locally (.RBS file)         */
+#define DISPLAY_NOAUTOMORE 0x100 /* Do not pause with More prompt            */
+#define DISPLAY_RIPRAW    0x200 /* Blast .rip/.rbs via ComWrite (no Mdm_putc) */
 
 #define DISP_EOF 257           /* end of file indicator for DispGetChar()   */
 

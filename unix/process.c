@@ -64,7 +64,7 @@ int spawnvp(int mode, const char *Cfile, char *const argv[])
         return 0; /* normal child exit */
 
       if (WIFSIGNALED(status))
-        fprintf(stderr, "%s : Child (%s) exited due to signal %i!\n", __FUNCTION__, Cfile, WSTOPSIG(status));
+        fprintf(stderr, "%s: Child (%s) exited due to signal %i!\n", __func__, Cfile, WSTOPSIG(status));
 
       return -1;
     }
@@ -82,7 +82,7 @@ int spawnvp(int mode, const char *Cfile, char *const argv[])
   }
 
   execvp(file, argv);
-  fprintf(stderr,  "%s : could not spawn %s! (%s)\n", __FUNCTION__, file, strerror(errno));
+  fprintf(stderr, "%s: could not spawn %s! (%s)\n", __func__, file, strerror(errno));
   _exit(1);
 }
 

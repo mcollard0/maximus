@@ -17,11 +17,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#ifndef __GNUC__
 #pragma off(unreferenced)
-static char rcs_id[]="$Id: max.c,v 1.5 2004/01/28 06:38:10 paltas Exp $";
+static char rcs_id[]="$Id: max.c,v 1.1.1.1 2002/10/01 17:51:17 sdudley Exp $";
 #pragma on(unreferenced)
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,12 +71,6 @@ int _stdc c_main(int argc,char *argv[])
   /*dmalloc_on(1);*/
 
   Init_Variables();
-
-#if defined(UNIX)
-  chdir(INSTALL_PREFIX);
-  if (!getenv("MAXIMUS"))
-    putenv("MAXIMUS=" INSTALL_PREFIX "/etc/max.prm");
-#endif
 
   if ((ctlname=(char *)malloc(PATHLEN))==NULL)
     maximus_exit(2);
