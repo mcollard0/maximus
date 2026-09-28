@@ -1,8 +1,7 @@
 # Maximus-CBCS — Unix BBS Core
 
-<video src="docs/media/castle-bbs-demo.webm" controls muted preload="metadata">
-  <a href="docs/media/castle-bbs-demo.webm">Watch the Castle of the Gods V Maximus BBS demonstration video.</a>
-</video>
+[castle-bbs-demo.webm](https://github.com/user-attachments/assets/a2b6adbb-3108-4c70-a9ef-2c8d36d0d345)
+
 
 Maximus-CBCS is a GPL-2.0 Bulletin Board System core, originally developed by Lanius Corporation and ported to Unix by Wes Garland. This tree contains the native Unix source, compiler tools, stock configuration tree, message-base utilities, and the Castle of the Gods V compatibility and performance work.
 
