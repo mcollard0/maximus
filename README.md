@@ -1,4 +1,4 @@
-# Maximus-CBCS — Unix BBS Core
+# Maximus-CBCS — Linux BBS Core
 
 [Screencap_20260928_130645.webm](https://github.com/user-attachments/assets/3abbeaf1-c2b2-4cd9-be79-4a154cb3bea0)
 
