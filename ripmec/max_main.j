@@ -75,39 +75,43 @@
   'Paste button commands
     FontStyle Small HorizDir 4
     Button 110  95 0 0 M email.icn    <>Message areas<>m
-    Button 110 140 0 0 F diskette.icn <>File areas<>f
-    Button 110 185 0 0 C tnk.icn      <>Change setup<>c
-    Button 110 230 0 0 B news.icn     <>Bulletins<>b
-    Button 110 275 0 0 O ewrite.icn   <>Off-line reader<>o
+    Button 110 134 0 0 F diskette.icn <>File areas<>f
+    Button 110 173 0 0 C tnk.icn      <>Change setup<>c
+    Button 110 212 0 0 B news.icn     <>Bulletins<>b
+    Button 110 251 0 0 O ewrite.icn   <>Off-line reader<>o
+
+    Button 110 290 0 0 L ewrite.icn  <>OneLiners<>l
 
     Button 300  95 0 0 G horizon.icn  <>Goodbye<>g
-    Button 300 140 0 0 S noshuf.icn   <>Statistics<>s
-    Button 300 185 0 0 U caticon.icn  <>User list<>u
-    Button 300 230 0 0 $ dollar.icn   <>$MEX Test<>$
-    Button 300 275 0 0 V blademtr.icn <>Version of BBS<>v
+    Button 300 134 0 0 S noshuf.icn   <>Statistics<>s
+    Button 300 173 0 0 U caticon.icn  <>User list<>u
+    Button 300 212 0 0 D dollar.icn   <>DOOR Games<>d
+    Button 300 251 0 0 V blademtr.icn <>Version of BBS<>v
 
     Button 490  95 0 0 Y ge.icn       <>Yell for SysOp<>y
-    Button 490 140 0 0 W guesswht.icn <>Who is On<>w
-    Button 490 185 0 0 / trivia.icn   <>/Chat Menu<>/
-    Button 490 230 0 0 ? helpicon.icn <>?Help!<>?
-    Button 490 275 0 0 # golf.icn     <>#Sysop Menu<>#
+    Button 490 134 0 0 W guesswht.icn <>Who is On<>w
+    Button 490 173 0 0 / trivia.icn   <>/Chat Menu<>/
+    Button 490 212 0 0 ? helpicon.icn <>?Help!<>?
+    Button 490 251 0 0 # golf.icn     <>#Sysop Menu<>#
 
   'put icons on the screen
 
    LoadIcon  42  80 CopyPut 0 email.icn
-   LoadIcon  42 125 CopyPut 0 diskette.icn
-   LoadIcon  42 170 CopyPut 0 tnk.icn
-   LoadIcon  42 215 CopyPut 0 news.icn
-   LoadIcon  42 260 CopyPut 0 ewrite.icn
+   LoadIcon  42 119 CopyPut 0 diskette.icn
+   LoadIcon  42 158 CopyPut 0 tnk.icn
+   LoadIcon  42 197 CopyPut 0 news.icn
+   LoadIcon  42 236 CopyPut 0 ewrite.icn
+
+   LoadIcon  42 275 CopyPut 0 ewrite.icn
 
    LoadIcon 230  80 CopyPut 0 horizon.icn
-   LoadIcon 230 125 CopyPut 0 noshuf.icn
-   LoadIcon 230 170 CopyPut 0 caticon.icn
-   LoadIcon 230 215 CopyPut 0 dollar.icn
-   LoadIcon 230 260 CopyPut 0 blademtr.icn
+   LoadIcon 230 119 CopyPut 0 noshuf.icn
+   LoadIcon 230 158 CopyPut 0 caticon.icn
+   LoadIcon 230 197 CopyPut 0 dollar.icn
+   LoadIcon 230 236 CopyPut 0 blademtr.icn
 
    LoadIcon 418  80 CopyPut 0 ge.icn
-   LoadIcon 418 125 CopyPut 0 guesswht.icn
-   LoadIcon 418 170 CopyPut 0 trivia.icn
-   LoadIcon 418 215 CopyPut 0 helpicon.icn
-   LoadIcon 418 260 CopyPut 0 golf.icn
+   LoadIcon 418 119 CopyPut 0 guesswht.icn
+   LoadIcon 418 158 CopyPut 0 trivia.icn
+   LoadIcon 418 197 CopyPut 0 helpicon.icn
+   LoadIcon 418 236 CopyPut 0 golf.icn

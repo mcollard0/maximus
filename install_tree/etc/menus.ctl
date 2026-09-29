@@ -127,6 +127,7 @@ Menu MAIN
 
         Goodbye                               Transient "Goodbye (log off)"
         MEX             m/stats                 Demoted "Statistics"
+        MEX             m/oneliner              Demoted "L OneLiner"
   NoDsp Press_Enter                             Demoted "S"
         Userlist                                Demoted "UserList"
         Version                                 Demoted "Version of BBS"
@@ -446,4 +447,3 @@ UsrLocal  Xtern_Run     /bin/sh                 Sysop "OS shell"
   NoDsp Display_Menu    MAIN                        Sysop "Q"
   NoDsp Display_Menu    MAIN                        Sysop "|"
 End Menu
-

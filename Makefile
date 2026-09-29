@@ -82,6 +82,8 @@ max_install: mkdirs
 	$(foreach DIR, $(MAX_LIB_DIRS), cd $(DIR) && $(MAKE) install_libs; cd ..; )
 	cd util && $(MAKE)
 	$(foreach DIR, $(PROG_DIRS), cd $(DIR) && $(MAKE) install; cd ..; )
+	cp scripts/oneliner_store.py "$(BIN)/oneliner_store"
+	chmod 755 "$(BIN)/oneliner_store"
 
 squish:
 	$(foreach DIR, $(SQUISH_LIB_DIRS), cd $(DIR) && $(MAKE); cd ..; )
@@ -98,6 +100,7 @@ configure:
 config_install:
 	export PREFIX
 	@scripts/copy_install_tree.sh "$(PREFIX)"
+	cp m/oneliner.mex "$(PREFIX)/m/oneliner.mex"
 
 	$(MAKE) reconfig
 

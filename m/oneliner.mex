@@ -1,0 +1,94 @@
+// One line per registered user per local BBS calendar day.
+// Storage is delegated to bin/oneliner_store; the MEX VM cannot lock files.
+#include <max.mh>
+#include <max_menu.mh>
+
+int request(string: action, string: name, string: message, ref string: status)
+{
+  string: filename, result, line;
+  int: fd;
+
+  filename := "oneliner." + itostr(id.task_num) + ".req";
+  result := "oneliner." + itostr(id.task_num) + ".result";
+  remove(result);
+  fd := open(filename, IOPEN_CREATE | IOPEN_WRITE);
+  if (fd = -1)
+    return False;
+  writeln(fd, name);
+  if (action = "post")
+    writeln(fd, message);
+  close(fd);
+
+  shell(IOUTSIDE_RUN, "bin/oneliner_store " + action + " " + itostr(id.task_num));
+  remove(filename);
+  fd := open(result, IOPEN_READ);
+  if (fd = -1)
+    return False;
+  if (readln(fd, status) = -1)
+  {
+    close(fd);
+    remove(result);
+    return False;
+  }
+  if (action = "list")
+  {
+    print(COL_LCYAN "\nRecent oneliners:\n" COL_WHITE);
+    while (readln(fd, line) <> -1)
+      print(line, "\n");
+  }
+  close(fd);
+  remove(result);
+  return True;
+}
+
+int main(string: argv)
+{
+  string: status, message;
+  int: len;
+
+  id.instant_video := 0;
+  // The RIP main menu leaves a zero-sized text window behind.  Give the
+  // feed and input prompt a visible window before writing ordinary text.
+  if (usr.rip)
+    print("\r!|1K|*|w0000271710|e|H|#|#\n");
+  else
+    menu_cmd(MNU_CLS, "");
+  print(COL_YELLOW "\nOneLiner" COL_WHITE " - one message per day, up to 72 characters.\n");
+  if (request("list", usr.name, "", status) = False)
+  {
+    print("OneLiner is unavailable right now.\n");
+    menu_cmd(MNU_PRESS_ENTER, "");
+    return 1;
+  }
+  if (status = "LIMIT")
+  {
+    print("\nYou have already posted today. Come back tomorrow.\n");
+    menu_cmd(MNU_PRESS_ENTER, "");
+    return 0;
+  }
+  if (status <> "CAN_POST")
+  {
+    print("OneLiner could not check your posting limit.\n");
+    menu_cmd(MNU_PRESS_ENTER, "");
+    return 1;
+  }
+
+  len := input_str(message, INPUT_NLB_LINE, 0, 72,
+                   COL_LGREEN "\nYour line (Enter to cancel): " COL_WHITE);
+  if (len <= 0)
+    return 0;
+  if (request("post", usr.name, message, status) = False)
+  {
+    print("OneLiner could not save your message.\n");
+    menu_cmd(MNU_PRESS_ENTER, "");
+    return 1;
+  }
+  if (status = "POSTED")
+    print(COL_LGREEN "Your oneliner was posted.\n" COL_WHITE);
+  else if (status = "LIMIT")
+    print("You have already posted today.\n");
+  else
+    print("OneLiner could not save your message.\n");
+  menu_cmd(MNU_PRESS_ENTER, "");
+  return 0;
+}

@@ -11,6 +11,12 @@ endif
 
 all: libcomm.so
 
+.PHONY: test
+test:
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DTELNET -fsanitize=address,undefined -fno-omit-frame-pointer test_ipcomm.c ../unix/wincomm.c -o test_ipcomm
+	./test_ipcomm
+	$(RM) test_ipcomm
+
 install_libs install: libcomm.so
 	cp -f $^ $(LIB)
 

@@ -98,6 +98,9 @@ struct _hcomm
   BOOL			burstModePending; /**< Next write's burst mode */
   telnet_moption_t	telnetPendingOptions; /**< Unprocessed option requests from remote */
   telnet_moption_t	telnetOptions; /**< Current telnet options (bitmask) */
+  unsigned char         telnetReadState; /**< Parser state retained across socket reads. */
+  unsigned char         telnetReadCommand;
+  BOOL                  telnetAfterCR;   /**< Consume the LF/NUL following an NVT CR. */
   /* Coalesce single-byte ComPutc traffic into large TCP writes (RIP/ANSI). */
   unsigned char		*txCoalesce;
   size_t		txCoalesceLen;
@@ -487,231 +490,106 @@ void setTelnetOption(HCOMM hc, telnet_command_t command, telnet_option_t option)
       *optionMask |= telnetOptionBit(option);
       break;
     case FALSE:
-      *optionMask &= telnetOptionBit(option);
+      *optionMask &= ~telnetOptionBit(option);
   }
 
   return;
 }
 
-/** Read, consuming NVT control codes in as transparent a manner as possible.
- *  Processes IAC DO/DONT/WONT codes and adjusts hc as needed. Control codes
- *  are not passed to the caller.
- *
- *  @param	fd	file descriptor to read from
- *  @param	buf	buffer to populate
- *  @param	count	size of buffer
- *  @param	timeout	Number of seconds to wait for data.
- *
- *  @returns		Number of bytes read, or -1 on error.
+/* Each state consumes only bytes already received. Never wait for a command
+ * argument or CR suffix: TCP can split them across any number of reads. */
+enum telnet_read_state
+{
+  TELNET_DATA, TELNET_IAC, TELNET_OPTION, TELNET_SB, TELNET_SB_IAC
+};
+
+/** Read application data, consuming Telnet commands and NVT CR suffixes.
+ * The caller has already selected the socket for reading. In-place decoding
+ * only removes bytes, so output cannot exceed the caller's buffer size.
  */
 static inline ssize_t telnet_read(HCOMM hc, unsigned char *buf, size_t count)
 {
-  unsigned char	*iac, *ch, arg, arg2;
-  int		fd = hc->h;
-  ssize_t	bytesRead = read(fd, buf, count);	/* Select()ed for read already */
+  ssize_t bytesRead;
+  size_t in, out = 0;
+  unsigned char c;
 
   if (!hc)
     return -1;
 
-  if (hc->telnetOptions & mopt_TRANSMIT_BINARY)
-    return bytesRead;
-
-  telnet_read_reread:
+  bytesRead = read(hc->h, buf, count);
   if (bytesRead <= 0)
     return bytesRead;
 
-  if (count == 1) 
+  for (in = 0; in < (size_t)bytesRead; ++in)
   {
-    /* Asked for a single byte. Make sure the returned byte
-     * was nothing special. 
-     *
-     * Note: According to my docs, NULs are to be ignored
-     *       during telnet. So how the heck do we do ZMODEM? 
-     *	     Probably with IAC WILL TRANSMIT-BINARY.
-     */
-
-    switch(buf[0])
+    c = buf[in];
+    switch (hc->telnetReadState)
     {
-      case '\0':
-	count = timeout_read(fd, buf, 1, 0);
-	goto telnet_read_reread;
-      case cmd_IAC:
-	break;				/* Fall through to IAC processing below */
-      case '\r':
-	hc->peekHack = -1;
-	timeout_read(hc->h, (char *)&(hc->peekHack), 1, 1);
-	switch(hc->peekHack)
-	{
-	  case '\n':			/* Telnet end-of-line, give max \r\n */
-	    hc->peekHack = -1;
-	    return bytesRead;
-	    break;
-	  case '\0':			/* Telnet carriage return, give max \r (consume \0) */
-	    hc->peekHack = -1;
-	    break;
-	}
-	break;
+      case TELNET_IAC:
+        hc->telnetReadState = TELNET_DATA;
+        switch (c)
+        {
+          case cmd_IAC:
+            break;                  /* Escaped application byte. */
+          case cmd_WILL:
+          case cmd_WONT:
+          case cmd_DO:
+          case cmd_DONT:
+            hc->telnetReadCommand = c;
+            hc->telnetReadState = TELNET_OPTION;
+            continue;
+          case cmd_SB:
+            hc->telnetReadState = TELNET_SB;
+            continue;
+          case cmd_EC:
+            c = '\b';
+            break;
+          default:
+            continue;               /* Command without an argument. */
+        }
+        break;
+      case TELNET_OPTION:
+        setTelnetOption(hc, hc->telnetReadCommand, c);
+        hc->telnetReadState = TELNET_DATA;
+        continue;
+      case TELNET_SB:
+        if (c == cmd_IAC)
+          hc->telnetReadState = TELNET_SB_IAC;
+        continue;
+      case TELNET_SB_IAC:
+        hc->telnetReadState = (c == cmd_SE) ? TELNET_DATA : TELNET_SB;
+        continue;
       default:
-	return bytesRead;
+        if (c == cmd_IAC)
+        {
+          hc->telnetReadState = TELNET_IAC;
+          continue;
+        }
+        break;
     }
-  }
-  else
-  {
-    /* Modify in-buffer eol, or cr sequences to look right */
 
-    for (ch = memchr(buf, '\r', bytesRead);
-	 ch && bytesRead;
-	 ch = memchr(ch, '\r', bytesRead - (ch - buf)))
+    /* Binary mode still uses IAC escaping/commands, but preserves all data. */
+    if (!(hc->telnetOptions & mopt_TRANSMIT_BINARY))
     {
-      switch(ch[1])
+      if (hc->telnetAfterCR)
       {
-	case '\n':			/* Telnet end-of-line, give max \r\n */ 
-	  ch++; 
-	  break;
-	case '\0':			/* Telnet carriage return, give max \r (consume \0) */
-	  memmove(ch, ch + 1, --bytesRead);
-	  break;
+        hc->telnetAfterCR = FALSE;
+        if (c == '\n' || c == '\0')
+          continue;
       }
-    }
-
-    /* Pull \0 out of the buffer */
-    for (ch = memchr(buf, '\0', bytesRead);
-	 ch && bytesRead;
-	 ch = memchr(ch + 1, '\0', bytesRead - (ch - buf)))
-    {
-      memmove(ch, ch + 1, --bytesRead);
-    }
-
-    /* All characters consumed?? Try again */ 
-    if (bytesRead == 0)
-    {
-      bytesRead = timeout_read(fd, buf, count, 0);
-      if (bytesRead > 0)
-	goto telnet_read_reread;
-      return bytesRead;
-    }
-  }
-
-  /* Code below here assumes bytesRead, count >= 1 */
-  for (iac = memchr(buf, cmd_IAC, bytesRead);
-       bytesRead > 0 && iac && (iac < (buf + bytesRead));
-       iac = memchr(iac + 1, cmd_IAC, bytesRead))
-  {
-    /* There was an embedded IAC. This means we need 
-     * to locate the telnet data and "consume" it.
-     */
-
-    if (iac == (buf + bytesRead - 1))		/* IAC last char in buf? */
-    {
-      if (timeout_read(fd, &arg, 1, 5) != 1)
-      {
-	sleep(1);
-	if (timeout_read(fd, &arg, 1, 5) != 1)
-	  return bytesRead - 1;			/* Can't find the argument.. drop the IAC */
-      }
-
-      if (arg == cmd_IAC)			/* Escaped (real) IAC (0xff) @ end of buf */
-	return bytesRead;
-
-      bytesRead -= 1;
+      if (c == '\0')
+        continue;
+      hc->telnetAfterCR = (c == '\r');
     }
     else
-    {
-      arg = iac[1];
-      if (arg == cmd_IAC || (arg == cmd_EC))	/* Escaped (real) IAC (0xff), or erase char command */
-      {
-	bytesRead -= 1;
-	memmove(iac, iac + 1, bytesRead - (iac - buf));
-	if (arg == cmd_EC)
-	  *iac = 0x08; 				/* erase char command: shove a backspace in the stream */
-	continue;
-      }
-      else
-      {
-	bytesRead -= 2;
-	memmove(iac, iac + 2, bytesRead - (iac - buf));
-      }
-    }
+      hc->telnetAfterCR = FALSE;
 
-    /* Now the IAC and a single argument have been consumed. iac
-     * is now a pointer to arbitrary telnet data 
-     */
+    buf[out++] = c;
+  }
 
-    switch(arg)
-    {
-      case cmd_WILL:				/* These each have one additional argument. */
-      case cmd_WONT: 
-      case cmd_DO:
-      case cmd_DONT:
-	if (iac == (buf + bytesRead))		/* Extra argument not in buffer */
-	{
-	  if (timeout_read(fd, &arg2, 1, 2) != 1)
-	    return bytesRead;			/* Can't find the last argument.. drat. */
-	}
-	else
-	{
-	  arg2 = *iac;
-	  bytesRead -= 1;
-	  memmove(iac, iac + 1, bytesRead - (iac - buf));
-	}
-	setTelnetOption(hc, arg, arg2);
-	break; /* continue loop */
-
-      case cmd_SE:				/* These commands have no arguments */
-      case cmd_NOP:
-      case cmd_DM:
-      case cmd_BRK:
-      case cmd_IP:
-      case cmd_AO:
-      case cmd_AYT:
-      case cmd_GA:
-	break; /* continue loop */
-	
-      case cmd_SB:				/* Telnet subneg'n data coming; ignore all data 'till IAC/SE */
-      {
-	unsigned char 	*niac; /* next IAC */
-	int		found = 0;
-
-	for (niac = memchr(iac, cmd_IAC, bytesRead - (iac - buf));
-	     niac && (niac < (buf + bytesRead));
-	     niac = memchr(niac + 1, cmd_IAC, bytesRead - (niac -buf)))
-	{
-	  if (niac[1] == cmd_SE)
-	  {
-	    found = 1;
-	    break;
-	  }
-	}
-	
-	if (found)				/* IAC/SE sequence was in buffer. Consume it */
-	{
-	  bytesRead -= ((niac + 1) - iac);
-	  memmove(iac, niac + 1, bytesRead - ((niac + 1) - buf));
-	}
-	else					/* IAC/SE seq not in current buffer. Read 'till we find it */
-	{
-	  unsigned char	c, lastC;
-	  ssize_t	i;
-
-	  c = buf[bytesRead - 1];		/* Prime the loop with the last char read */
-	  bytesRead = iac - buf;		/* Report back we only read up to the IAC */
-
-	  do
-	  {
-	    lastC = c;
-	    i = timeout_read(fd, &c, 1, 20);
-	  } while ((i = 1) && !(c == cmd_SE && lastC == cmd_IAC));
-	}
-	break; /* continue loop */
-      }
-      default:
-	logit("!Found unknown IAC argument %c", arg);
-	break; /* continue loop */
-    } /* esac */
-  } /* end for */
-
-  return bytesRead;
+  return (ssize_t)out;
 }
+
 #else
 # define telnet_read(a, b, c) read(a->h,b,c)
 #endif
@@ -732,32 +610,44 @@ void negotiateTelnetOptions(HCOMM hc)
 
   ch = ComPeek(hc);	/* Get the ball rolling -- ComPeek() will process/consume remote telnet commands */
 
-  sprintf(command, "%c%c%c", cmd_IAC, cmd_DONT, opt_ENVIRON);
+  command[0] = cmd_IAC;
+  command[1] = cmd_DONT;
+  command[2] = opt_ENVIRON;
   write(hc->h, command, 3);
   if (ch == -1)
     ch = ComPeek(hc);
 
-  sprintf(command, "%c%c%c", cmd_IAC, cmd_DO, opt_SGA);
+  command[0] = cmd_IAC;
+  command[1] = cmd_DO;
+  command[2] = opt_SGA;
   write(hc->h, command, 3);
   if (ch == -1)
     ch = ComPeek(hc);
 
-  sprintf(command, "%c%c%c", cmd_IAC, cmd_WILL, opt_ECHO);
+  command[0] = cmd_IAC;
+  command[1] = cmd_WILL;
+  command[2] = opt_ECHO;
   write(hc->h, command, 3);
   if (ch == -1)
     ch = ComPeek(hc);
 
-  sprintf(command, "%c%c%c", cmd_IAC, cmd_WILL, opt_SGA);
+  command[0] = cmd_IAC;
+  command[1] = cmd_WILL;
+  command[2] = opt_SGA;
   write(hc->h, command, 3);
   if (ch == -1)
     ch = ComPeek(hc);
 
-  sprintf(command, "%c%c%c", cmd_IAC, cmd_DONT, opt_NAWS);
+  command[0] = cmd_IAC;
+  command[1] = cmd_DONT;
+  command[2] = opt_NAWS;
   write(hc->h, command, 3);
   if (ch == -1)
     ch = ComPeek(hc);
 
-  sprintf(command, "%c%c%c", cmd_IAC, cmd_DO, opt_TRANSMIT_BINARY);
+  command[0] = cmd_IAC;
+  command[1] = cmd_DO;
+  command[2] = opt_TRANSMIT_BINARY;
   write(hc->h, command, 3);
   if (ch == -1)
     ch = ComPeek(hc);
@@ -830,7 +720,7 @@ USHORT COMMAPI ComIsOnline(HCOMM hc)
       unsigned char 	buf[1];
       ssize_t		i;
 
-      i = read(hc->h, &buf, 1);
+      i = recv(hc->h, buf, 1, MSG_PEEK);
       switch(i)
       {
 	case 0:
@@ -840,8 +730,7 @@ USHORT COMMAPI ComIsOnline(HCOMM hc)
 	  close(hc->h);
 	  break;
 	case 1:
-	  hc->peekHack = buf[0];
-	  break;
+	  break; /* Leave application data and Telnet commands for telnet_read. */
       }
 
       if (hc->fDCD == 0)
@@ -1182,13 +1071,13 @@ BOOL COMMAPI ComRead(HCOMM hc, PVOID pvBuf, DWORD dwBytesToRead, PDWORD pdwBytes
  */
 int COMMAPI ComGetc(HCOMM hc)
 {
-  DWORD dwBytesRead;
+  DWORD dwBytesRead = 0;
   BYTE b;
 
   if (!ComIsOnline(hc))
     return -1;
 
-  return (ComRead(hc, &b, 1, &dwBytesRead) == 1) ? b : -1;
+  return (ComRead(hc, &b, 1, &dwBytesRead) && dwBytesRead == 1) ? b : -1;
 }
 
 /** "peek" by reading, and setting peekHack to the value
@@ -1203,6 +1092,11 @@ int COMMAPI ComPeek(HCOMM hc)
   if (!ComIsOnline(hc))
     return -1;
 
+  /* Input loops poll here before calling ComRead. Deliver the screen and
+   * its prompt even when the caller has not sent another character yet. */
+  if (!ComTxFlush(hc))
+    return -1;
+
   /* Already holding a peeked byte */
   if (hc->peekHack != -1)
     return hc->peekHack;
@@ -1210,16 +1104,28 @@ int COMMAPI ComPeek(HCOMM hc)
   /* NON-BLOCKING peek.  ComGetc()/ComRead() use ReadTotalTimeoutConstant
    * (~125ms).  Mdm_keyp() -> mdm_avail() -> ComInCount() -> ComPeek() on
    * every input poll, so a blocking peek made every keystroke feel lagged.
-   * timeout_read(..., 0) uses select with ~0.5ms spin only.
+   * First wait non-blockingly, then let telnet_read consume CR LF / CR NUL
+   * as one Return; reading directly here used to leave the LF queued for
+   * the following prompt.
    */
-  n = timeout_read(hc->h, &b, 1, 0);
-  if (n == 1)
   {
-    hc->peekHack = (int)b;
-    return hc->peekHack;
+    fd_set rfds;
+    struct timeval tv;
+
+    FD_ZERO(&rfds);
+    FD_SET(hc->h, &rfds);
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+
+    if (select(hc->h + 1, &rfds, NULL, NULL, &tv) != 1)
+      return -1;
   }
 
-  return -1;
+  n = telnet_read(hc, &b, 1);
+  if (n != 1)
+    return -1;
+  hc->peekHack = (int)b;
+  return hc->peekHack;
 }
 
 /** Write a single character to the com port.
@@ -1275,6 +1181,9 @@ BOOL COMMAPI ComRxWait(HCOMM hc, DWORD dwTimeOut)
   if (!hc)
     return FALSE;
 
+  if (!ComTxFlush(hc))
+    return FALSE;
+
   if (hc->peekHack != -1)
     return TRUE;
 
@@ -1322,6 +1231,9 @@ BOOL COMMAPI ComTxWait(HCOMM hc, DWORD dwTimeOut)
 
   if (ComIsOnline(hc))
   {
+    if (!ComTxFlush(hc))
+      return FALSE;
+
     if (select(hc->h + 1, NULL, &fds, NULL, &tv) < 0)
       hc->fDCD = 0;
   }
@@ -1362,13 +1274,17 @@ DWORD COMMAPI ComInCount(HCOMM hc)
   return (ch >= 0 ? 1 : 0);
 }
 
-/** Returns the number of bytes present in the transmit ring buffer.
- *  @returns 0
+/** Drain the application transmit buffer before reporting pending bytes.
+ * There is no background transmitter: callers such as Mdm_flush poll this
+ * function until it returns zero. Socket writes are synchronous here.
  */
 DWORD COMMAPI ComOutCount(HCOMM hc)
 {
-  ComIsOnline(hc);
-  return 0;
+  if (!ComIsOnline(hc))
+    return 0;
+
+  ComTxFlush(hc);
+  return (DWORD)hc->txCoalesceLen;
 }
 
 /** Returns the number of free bytes in the transmit ring buffer.
@@ -1543,7 +1459,6 @@ BOOL COMMAPI ComIsAModem(HCOMM hc)
 
   return FALSE;
 }
-
 
 
 

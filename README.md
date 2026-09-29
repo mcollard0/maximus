@@ -27,6 +27,7 @@ The included video demonstrates the Castle deployment that uses this source. It 
 - ANSI, AVATAR, RIP, and TTY output paths, plus user terminal detection.
 - Squish message-base tools in `squish/` and shared messaging APIs in `msgapi/`.
 - MECCA screen compiler and MEX scripting support for menus, prompts, and custom BBS logic.
+- `m/oneliner.mex` provides a daily OneLiner screen. The main menu binds it to `L`, including a button on the RIP menu; the screen shows the latest 20 posts. `scripts/oneliner_store.py` keeps posts in `etc/oneliner.sqlite3` and enforces one post per user per BBS local calendar day.
 - Silt configuration compiler, MAID language compiler, file areas, message areas, user records, and protocol-transfer support.
 
 ## Build

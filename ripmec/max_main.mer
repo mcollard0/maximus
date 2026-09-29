@@ -6,36 +6,39 @@
 !|Y00000100|c0F|@111TMAIN MENU:|@BF1T[remain] minutes remaining|c04|@101SMAIN MENU:|c00|@BE1S[remain] minutes remaining
 !|1B2S0G0207QE02010F0F0807000A0407000000|Y02000400
 !|1U322N00002500email.icn<>Message areas<>m
-!|1U323W00001Y00diskette.icn<>File areas<>f
-!|1U325500001V00tnk.icn<>Change setup<>c
-!|1U326E00001U00news.icn<>Bulletins<>b
-[acs limited]!|1U327N00002700ewrite.icn<>Off-line reader<>o
+!|1U323Q00001Y00diskette.icn<>File areas<>f
+!|1U324T00001V00tnk.icn<>Change setup<>c
+!|1U325W00001U00news.icn<>Bulletins<>b
+[acs limited]!|1U326Z00002700ewrite.icn<>Off-line reader<>o
 !|1U8C2N00001Z00horizon.icn<>Goodbye<>g
-!|1U8C3W00002B00noshuf.icn<>Statistics<>s
-!|1U8C5500002D00caticon.icn<>User list<>u
-[acs sysop]!|1U8C6E00001000dollar.icn<>$MEX Test<>$
-!|1U8C7N00002E00blademtr.icn<>Version of BBS<>v
+!|1U8C3Q00002B00noshuf.icn<>Statistics<>s
+!|1U8C4T00002D00caticon.icn<>User list<>u
+!|1U8C5W00001W00dollar.icn<>DOOR Games<>d
+!|1U8C6Z00002E00blademtr.icn<>Version of BBS<>v
 !|1UDM2N00002H00ge.icn<>Yell for SysOp<>y
-!|1UDM3W00002F00guesswht.icn<>Who is On<>w
-!|1UDM5500001B00trivia.icn<>/Chat Menu<>/
-!|1UDM6E00001R00helpicon.icn<>?Help\!<>?
-[acs sysop]!|1UDM7N00000Z00golf.icn<>#Sysop Menu<>#
+!|1UDM3Q00002F00guesswht.icn<>Who is On<>w
+!|1UDM4T00001B00trivia.icn<>/Chat Menu<>/
+!|1UDM5W00001R00helpicon.icn<>?Help\!<>?
+[acs sysop]!|1UDM6Z00000Z00golf.icn<>#Sysop Menu<>#
+!|1U328200002400ewrite.icn<>OneLiners<>l
 !|1I162800010email.icn
-!|1I163H00010diskette.icn
-!|1I164Q00010tnk.icn
-!|1I165Z00010news.icn
-[acs limited]!|1I167800010ewrite.icn
+!|1I163B00010diskette.icn
+!|1I164E00010tnk.icn
+!|1I165H00010news.icn
+[acs limited]!|1I166K00010ewrite.icn
 !|1I6E2800010horizon.icn
-!|1I6E3H00010noshuf.icn
-!|1I6E4Q00010caticon.icn
-[acs sysop]!|1I6E5Z00010dollar.icn
-!|1I6E7800010blademtr.icn
+!|1I6E3B00010noshuf.icn
+!|1I6E4E00010caticon.icn
+!|1I6E5H00010dollar.icn
+!|1I6E6K00010blademtr.icn
 !|1IBM2800010ge.icn
-!|1IBM3H00010guesswht.icn
-!|1IBM4Q00010trivia.icn
-!|1IBM5Z00010helpicon.icn
-[acs sysop]!|1IBM7800010golf.icn
+!|1IBM3B00010guesswht.icn
+!|1IBM4E00010trivia.icn
+!|1IBM5H00010helpicon.icn
+[acs sysop]!|1IBM6K00010golf.icn
+!|1I167N00010ewrite.icn
 !|Y00000000|#|#|#
+[norip]
 [lightred]
 
   GREETINGS!
@@ -48,4 +51,4 @@
   restored so you can navigate the BBS with some sanity left intact.
 [lightgreen]
   Hit [lightred]C[lightgreen] then [lightred]R[lightgreen] now.
-[quit]
+[white]
