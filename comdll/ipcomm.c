@@ -100,6 +100,12 @@ struct _hcomm
   telnet_moption_t	telnetOptions; /**< Current telnet options (bitmask) */
   unsigned char         telnetReadState; /**< Parser state retained across socket reads. */
   unsigned char         telnetReadCommand;
+  unsigned char         telnetSuboption;
+  BOOL                  telnetSuboptionSeen;
+  unsigned char         telnetSubdata[4];
+  size_t                telnetSublength;
+  USHORT                termColumns;
+  USHORT                termRows;
   BOOL                  telnetAfterCR;   /**< Consume the LF/NUL following an NVT CR. */
   /* Coalesce single-byte ComPutc traffic into large TCP writes (RIP/ANSI). */
   unsigned char		*txCoalesce;
@@ -466,10 +472,17 @@ void setTelnetOption(HCOMM hc, telnet_command_t command, telnet_option_t option)
     case cmd_WILL:
       enable = TRUE;
       optionMask = &(hc->telnetOptions);
+      if ( option == opt_NAWS && !( hc->telnetOptions & mopt_NAWS ) )
+        logit( "+Telnet NAWS accepted by client" );
       break;
     case cmd_WONT:
       enable = FALSE;
       optionMask = &(hc->telnetOptions);
+      if (option == opt_NAWS)
+      {
+        hc->termColumns = hc->termRows = 0;
+        logit( "+Telnet NAWS refused by client; using terminal fallback" );
+      }
       break;
     case cmd_DO:
       enable = TRUE;
@@ -502,6 +515,31 @@ enum telnet_read_state
 {
   TELNET_DATA, TELNET_IAC, TELNET_OPTION, TELNET_SB, TELNET_SB_IAC
 };
+static void telnet_subbyte( HCOMM hc, unsigned char c )
+{
+  if ( !hc->telnetSuboptionSeen )
+  {
+    hc->telnetSuboption = c;
+    hc->telnetSuboptionSeen = TRUE;
+  }
+  else
+  {
+    if ( hc->telnetSublength < sizeof( hc->telnetSubdata ) )
+      hc->telnetSubdata[ hc->telnetSublength ] = c;
+    /* Saturate so oversized messages cannot wrap back to a valid length. */
+    if ( hc->telnetSublength <= sizeof( hc->telnetSubdata ) )
+      ++hc->telnetSublength;
+  }
+}
+
+BOOL COMMAPI ComGetTerminalSize( HCOMM hc, USHORT *columns, USHORT *rows )
+{
+  if ( !hc || !columns || !rows )
+    return FALSE;
+  *columns = hc->termColumns;
+  *rows = hc->termRows;
+  return ( *columns != 0 || *rows != 0 );
+}
 
 /** Read application data, consuming Telnet commands and NVT CR suffixes.
  * The caller has already selected the socket for reading. In-place decoding
@@ -539,6 +577,8 @@ static inline ssize_t telnet_read(HCOMM hc, unsigned char *buf, size_t count)
             hc->telnetReadState = TELNET_OPTION;
             continue;
           case cmd_SB:
+            hc->telnetSuboptionSeen = FALSE;
+            hc->telnetSublength = 0;
             hc->telnetReadState = TELNET_SB;
             continue;
           case cmd_EC:
@@ -555,9 +595,32 @@ static inline ssize_t telnet_read(HCOMM hc, unsigned char *buf, size_t count)
       case TELNET_SB:
         if (c == cmd_IAC)
           hc->telnetReadState = TELNET_SB_IAC;
+        else
+          telnet_subbyte( hc, c );
         continue;
       case TELNET_SB_IAC:
-        hc->telnetReadState = (c == cmd_SE) ? TELNET_DATA : TELNET_SB;
+        if ( c == cmd_SE )
+        {
+          if ( hc->telnetSuboptionSeen && hc->telnetSuboption == opt_NAWS &&
+               hc->telnetSublength == 4 && ( hc->telnetOptions & mopt_NAWS ) )
+          {
+            USHORT columns = ( hc->telnetSubdata[0] << 8 ) | hc->telnetSubdata[1];
+            USHORT rows = ( hc->telnetSubdata[2] << 8 ) | hc->telnetSubdata[3];
+            if ( columns != hc->termColumns || rows != hc->termRows )
+              logit( "+Telnet NAWS reported %u columns x %u rows", (unsigned)columns, (unsigned)rows );
+            hc->termColumns = columns;
+            hc->termRows = rows;
+          }
+          hc->telnetReadState = TELNET_DATA;
+        }
+        else
+        {
+          if ( c == cmd_IAC )
+            telnet_subbyte( hc, c );
+          else
+            hc->telnetSublength = 5;
+          hc->telnetReadState = TELNET_SB;
+        }
         continue;
       default:
         if (c == cmd_IAC)
@@ -639,9 +702,10 @@ void negotiateTelnetOptions(HCOMM hc)
     ch = ComPeek(hc);
 
   command[0] = cmd_IAC;
-  command[1] = cmd_DONT;
+  command[1] = cmd_DO;
   command[2] = opt_NAWS;
   write(hc->h, command, 3);
+  logit( "+Telnet DO NAWS requested" );
   if (ch == -1)
     ch = ComPeek(hc);
 

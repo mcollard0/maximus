@@ -84,13 +84,13 @@
 
     Button 300  95 0 0 G horizon.icn  <>Goodbye<>g
     Button 300 134 0 0 S noshuf.icn   <>Statistics<>s
-    Button 300 173 0 0 U caticon.icn  <>User list<>u
+    Button 300 173 0 0 / caticon.icn  <>/User list<>/
     Button 300 212 0 0 D dollar.icn   <>DOOR Games<>d
     Button 300 251 0 0 V blademtr.icn <>Version of BBS<>v
 
     Button 490  95 0 0 Y ge.icn       <>Yell for SysOp<>y
     Button 490 134 0 0 W guesswht.icn <>Who is On<>w
-    Button 490 173 0 0 / trivia.icn   <>/Chat Menu<>/
+    Button 490 173 0 0 U trivia.icn   <>uMRC Chat<>u
     Button 490 212 0 0 ? helpicon.icn <>?Help!<>?
     Button 490 251 0 0 # golf.icn     <>#Sysop Menu<>#
 

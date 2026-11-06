@@ -444,6 +444,18 @@ int Outside(char *leaving,char *returning,int method,char *parm,
 
 
   Out_Save_Directories(stay);
+  
+#ifdef UNIX
+  /* Door32 has no dimension fields. Export the effective remote text size. */
+  {
+    char columns[16], rows[16];
+    snprintf( columns, sizeof( columns ), "%d", TermWidth( ) );
+    snprintf( rows, sizeof( rows ), "%d", TermLength( ) );
+    setenv( "CASTLE_TERM_COLS", columns, 1 );
+    setenv( "CASTLE_TERM_ROWS", rows, 1 );
+    logit( "+Door terminal handoff: %s columns x %s rows", columns, rows );
+  }
+#endif
 
 
   /* Convert "%" command characters */

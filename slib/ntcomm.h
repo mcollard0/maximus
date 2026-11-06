@@ -99,6 +99,9 @@ BOOL COMMAPI ComWatchDog(HCOMM hc, BOOL fEnable, DWORD ulTimeOut);
 #if (COMMAPI_VER > 1)
 BOOL COMMAPI ComIsAModem(HCOMM hc);
 BOOL COMMAPI ComBurstMode(HCOMM hc, BOOL fEnable);
+#ifdef UNIX
+BOOL COMMAPI ComGetTerminalSize( HCOMM hc, USHORT *columns, USHORT *rows );
+#endif
 #endif
 #endif /* __NTCOMM_H_DEFINED */
 

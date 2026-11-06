@@ -139,6 +139,42 @@ int Read_Stats(struct _bbs_stats *bstats)
 }
 
 
+/* Reserve the next quote from disk, not the listener's startup snapshot.
+ * Persist while locked so simultaneous callers receive distinct entries.
+ */
+unsigned Reserve_Quote(unsigned count)
+{
+  char path[PATHLEN];
+  struct _bbs_stats saved;
+  int fd;
+  unsigned index = (unsigned)(bstats.quote_pos % count);
+
+  sprintf(path, "%sbbstats.bbs", PRM(sys_path));
+  fd=sopen(path, O_CREAT | O_RDWR | O_BINARY, SH_DENYNONE, S_IREAD | S_IWRITE);
+  if (fd == -1)
+    return index;
+#ifdef UNIX
+  if (lock_bbstats(fd, 1) != 0)
+  {
+    close(fd);
+    return index;
+  }
+#endif
+  if (read(fd, &saved, sizeof saved) != sizeof saved || saved.version != STATS_VER)
+    saved=bstats;
+  index=(unsigned)(saved.quote_pos % count);
+  saved.quote_pos=(index + 1U) % count;
+  bstats.quote_pos=saved.quote_pos;
+  lseek(fd, 0L, SEEK_SET);
+  write(fd, &saved, sizeof saved);
+#ifdef UNIX
+  flock(fd, LOCK_UN);
+#endif
+  close(fd);
+  return index;
+}
+
+
 void Write_Stats(struct _bbs_stats *bstats)
 {
   int bfile;
@@ -168,6 +204,13 @@ void Write_Stats(struct _bbs_stats *bstats)
     return; /* leave prior contents intact rather than corrupt */
   }
 #endif
+
+  /* A session may have started before another caller reserved a quote. */
+  {
+    struct _bbs_stats saved;
+    if (read(bfile, &saved, sizeof saved) == sizeof saved && saved.version == STATS_VER)
+      bstats->quote_pos=saved.quote_pos;
+  }
 
   if (lseek(bfile, 0L, SEEK_SET) == -1L ||
       ftruncate(bfile, 0) != 0 ||

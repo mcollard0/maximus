@@ -58,6 +58,9 @@ static char rcs_id[]="$Id: max_misc.c,v 1.3 2003/06/05 23:26:49 wesgarland Exp $
 #include "max_file.h"
 #include "display.h"
 #include "max_menu.h"
+#ifdef UNIX
+# include "ntcomm.h"
+#endif
 
 
   /* These values override the default values in the usr record
@@ -100,6 +103,10 @@ void GetLocalSize()
 
 int TermWidth(void)
 {
+#if defined( UNIX ) && !defined( ORACLE )
+  extern HCOMM hcModem;
+  USHORT columns, rows;
+#endif
   if (local)
   {
     if (loc_cols==0)
@@ -108,6 +115,10 @@ int TermWidth(void)
   }
   if (win_cols)
     return win_cols;
+#if defined( UNIX ) && !defined( ORACLE )
+  if ( ComGetTerminalSize( hcModem, &columns, &rows ) && columns >= 20 )
+    return columns > 132 ? 132 : columns;
+#endif
   if (hasRIP())
   {
     switch (rip_font)
@@ -125,6 +136,10 @@ int TermWidth(void)
 
 int TermLength(void)
 {
+#if defined( UNIX ) && !defined( ORACLE )
+  extern HCOMM hcModem;
+  USHORT columns, rows;
+#endif
   if (local)
   {
     if (loc_rows==0)
@@ -133,6 +148,10 @@ int TermLength(void)
   }
   if (win_rows)
     return win_rows;
+#if defined( UNIX ) && !defined( ORACLE )
+  if ( ComGetTerminalSize( hcModem, &columns, &rows ) && rows >= 8 )
+    return rows > 200 ? 200 : rows;
+#endif
   if (hasRIP())
   {
     switch (rip_font)

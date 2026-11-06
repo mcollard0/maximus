@@ -101,6 +101,7 @@ void Read_Access();
 void Compare_Dates(char *ctlname,char *prmname);
 int Read_Stats(struct _bbs_stats *bstats);
 void Write_Stats(struct _bbs_stats *bstats);
+unsigned Reserve_Quote(unsigned count);
 int quit(int el)  /* A substitute for exit, it exits with error code <erl> */;
 void FinishUp2(int hangup);
 unsigned int Decimal_Baud_To_Mask(unsigned int bd);

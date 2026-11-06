@@ -61,8 +61,7 @@ word DisplayDatacode(DSTK *d)
         return 0;
 
       /* Blank-line-separated quotes.  Build a list of absolute start
-       * offsets for each complete quote, then pick one at random (or
-       * advance bstats.quote_pos sequentially as a fallback seed).
+       * offsets for each complete quote, then reserve the next entry in the shared rotation.
        * Never print from mid-quote — that produced fragments such as
        * "that the competition already has the order."
        */
@@ -100,16 +99,14 @@ word DisplayDatacode(DSTK *d)
           break;
         }
 
-        /* Prefer rotating index stored in shared bstats; mix with rand so
-         * concurrent nodes still diverge.
-         */
+        /* Reserve from current shared state, including concurrent sessions. */
         {
           unsigned idx;
           long qpos;
           byte *p;
 
           /* Sequential rotation via shared bbstats.bbs quote_pos index */
-          idx=(unsigned)(bstats.quote_pos % (dword)nstarts);
+          idx=Reserve_Quote((unsigned)nstarts);
           qpos=starts[idx];
 
           fseek(quotefile, qpos, SEEK_SET);
@@ -121,10 +118,6 @@ word DisplayDatacode(DSTK *d)
             Printf("%s\n", d->scratch);
           }
 
-          /* Store next index (not byte offset) so sequential rotation works
-           * even when quotes have different lengths.
-           */
-          bstats.quote_pos=(dword)((idx + 1U) % (unsigned)nstarts);
           d->skipcr=TRUE;
         }
       }

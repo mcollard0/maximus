@@ -1,5 +1,9 @@
 include ../vars.mk
 
+# libmax's area API calls SquishHash in libmsgapi. Keep this dependency after
+# libmax so modern --as-needed linkers do not discard it before it is needed.
+LOADLIBES += -lmsgapi
+
 PROGS := 	maid mecca accem ansi2bbs scanbld ansi2mec cvtusr \
 		editcall mr fixlr setlr fb silt #maxpipe mxpipe32 piper
 

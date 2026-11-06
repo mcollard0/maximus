@@ -385,7 +385,7 @@ static void near Init_Menu(void)
   menuheap[0]='\0';
   menuofs=1;
 
-  menu.opt_width=20;
+  menu.opt_width=DEFAULT_OPT_WIDTH;
   menu.header=HEADER_NONE;
   menu.hot_colour=-1;
 

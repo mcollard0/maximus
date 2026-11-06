@@ -2,7 +2,14 @@
 #include <assert.h>
 #include "ipcomm.c"
 
-void logit(char *format, ...) { (void)format; }
+static unsigned naws_requests, naws_accepts, naws_refusals, naws_reports;
+void logit(char *format, ...)
+{
+  if ( strstr( format, "DO NAWS requested" ) ) ++naws_requests;
+  if ( strstr( format, "NAWS accepted" ) ) ++naws_accepts;
+  if ( strstr( format, "NAWS refused" ) ) ++naws_refusals;
+  if ( strstr( format, "NAWS reported" ) ) ++naws_reports;
+}
 void _fast NoMem(void) { abort(); }
 
 static void init_handle(HCOMM hc, int fd[2])
@@ -93,6 +100,72 @@ static void partitions(const unsigned char *wire, size_t len,
   }
 }
 
+static void naws_dimensions( void )
+{
+  const unsigned char wire[] = { 255, 250, 31, 0, 80, 0, 43, 255, 240, 'X' };
+  unsigned mask;
+  for ( mask = 0; mask < ( 1u << ( sizeof( wire ) - 1 ) ); ++mask )
+  {
+    struct _hcomm hc;
+    int fd[2];
+    size_t start = 0, end;
+    unsigned char result[32];
+    USHORT columns = 0, rows = 0;
+    init_handle( &hc, fd );
+    setTelnetOption( &hc, cmd_WILL, opt_NAWS );
+    for ( end = 1; end <= sizeof( wire ); ++end )
+    {
+      if ( end == sizeof( wire ) || ( mask & ( 1u << ( end - 1 ) ) ) )
+      {
+        size_t count = end - start;
+        ssize_t n;
+        assert( write( fd[1], wire + start, count ) == (ssize_t)count );
+        n = telnet_read( &hc, result, count );
+        assert( n == ( end == sizeof( wire ) ? 1 : 0 ) );
+        if ( n ) assert( result[0] == 'X' );
+        start = end;
+      }
+    }
+    assert( ComGetTerminalSize( &hc, &columns, &rows ) );
+    assert( columns == 80 && rows == 43 );
+    close( fd[0] );
+    close( fd[1] );
+  }
+  {
+    struct _hcomm hc;
+    int fd[2];
+    unsigned char result[32];
+    USHORT columns, rows;
+    const unsigned char escaped[] = { 255, 250, 31, 1, 255, 255, 0, 50, 255, 240 };
+    const unsigned char short_packet[] = { 255, 250, 31, 0, 132, 50, 255, 240 };
+    const unsigned char long_packet[] = { 255, 250, 31, 0, 132, 0, 50, 1, 255, 240 };
+    const unsigned char zero_packet[] = { 255, 250, 31, 0, 0, 0, 0, 255, 240 };
+    const unsigned char wide_packet[] = { 255, 250, 31, 0, 132, 0, 50, 255, 240 };
+    const unsigned char *packets[] = { escaped, short_packet, long_packet, zero_packet, wide_packet };
+    size_t lengths[] = { sizeof( escaped ), sizeof( short_packet ), sizeof( long_packet ), sizeof( zero_packet ), sizeof( wide_packet ) };
+    size_t i;
+    init_handle( &hc, fd );
+    /* Ignore unnegotiated size announcements. */
+    assert( write( fd[1], wire, sizeof( wire ) ) == sizeof( wire ) );
+    assert( telnet_read( &hc, result, sizeof( wire ) ) == 1 );
+    assert( !ComGetTerminalSize( &hc, &columns, &rows ) );
+    setTelnetOption( &hc, cmd_WILL, opt_NAWS );
+    for ( i = 0; i < 5; ++i )
+    {
+      assert( write( fd[1], packets[i], lengths[i] ) == (ssize_t)lengths[i] );
+      assert( telnet_read( &hc, result, lengths[i] ) == 0 );
+      ComGetTerminalSize( &hc, &columns, &rows );
+      if ( i < 3 ) assert( columns == 511 && rows == 50 );
+      else if ( i == 3 ) assert( columns == 0 && rows == 0 );
+      else assert( columns == 132 && rows == 50 );
+    }
+    setTelnetOption( &hc, cmd_WONT, opt_NAWS );
+    assert( !ComGetTerminalSize( &hc, &columns, &rows ) );
+    close( fd[0] );
+    close( fd[1] );
+  }
+}
+
 int main(void)
 {
   struct _hcomm hc;
@@ -100,11 +173,13 @@ int main(void)
   unsigned char buf[32];
   const unsigned char commands[] = {
     255, 254, 36, 255, 253, 3, 255, 251, 1,
-    255, 251, 3, 255, 254, 31, 255, 253, 0
+    255, 251, 3, 255, 253, 31, 255, 253, 0
   };
   /* Fail boundedly if a malformed command causes a blocking read or loop. */
   alarm(10);
   prompt_flushes();
+  naws_dimensions( );
+  assert( naws_accepts > 0 && naws_refusals > 0 && naws_reports > 0 );
   partitions((const unsigned char *)"AB\r\0", 4,
              (const unsigned char *)"AB\r", 3, 0);
   partitions((const unsigned char *)"ABC\r", 4,
@@ -132,6 +207,7 @@ int main(void)
   setTelnetOption(&hc, cmd_DONT, opt_ECHO);
   assert(hc.telnetPendingOptions == mopt_SGA);
   negotiateTelnetOptions(&hc);
+  assert( naws_requests == 1 );
   assert(read(fd[1], buf, sizeof(buf)) == sizeof(commands));
   assert(memcmp(buf, commands, sizeof(commands)) == 0);
 

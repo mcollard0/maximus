@@ -24014,7 +24014,7 @@
 
                 This keyword tells Maximus to display each menu option in a
                 space of exactly <width> characters. The default value for
-                <width> is 20.
+                <width> is 40.
 
              Title <name>
 

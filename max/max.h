@@ -732,7 +732,7 @@ struct _opt
   byte rsvd2[8]; /* Reserved for future uses */
 }  __attribute__((packed, aligned(2)));
 
-#define DEFAULT_OPT_WIDTH 20
+#define DEFAULT_OPT_WIDTH 40
 
 struct _menu
 {
